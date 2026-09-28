@@ -22,9 +22,8 @@
         <div class="section-heading"><span>1</span><div><h2>Perfis do projeto</h2><p>Adicione todas as seções deste estudo</p></div></div>
         <label class="field full"><span>Nome do projeto</span><input id="projectName" value="Nova lista de corte" maxlength="80"></label>
         <div class="profile-switcher">
-          <label class="field"><span>Perfil em edição</span><select id="profileSelect"></select></label>
-          <button id="addProfileButton" type="button" title="Adicionar perfil" aria-label="Adicionar perfil">+</button>
-          <button id="removeProfileButton" type="button" title="Remover perfil" aria-label="Remover perfil">×</button>
+          <div class="profile-list-heading"><span>Perfis cadastrados</span><button id="addProfileButton" type="button"><b>+</b> Adicionar perfil</button></div>
+          <div id="profileList" class="profile-list" role="listbox" aria-label="Perfis cadastrados"></div>
         </div>
         <label class="field full profile-name-field"><span>Identificação do perfil</span><input id="profileName" value="Perfil 1" maxlength="60" placeholder="Ex.: Tubo principal Ø60 × 3"></label>
         <div class="field-grid two">

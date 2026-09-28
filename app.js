@@ -3,8 +3,8 @@
 
   const $ = id => document.getElementById(id);
   const ui = {
-    projectName: $('projectName'), profileSelect: $('profileSelect'), addProfileButton: $('addProfileButton'),
-    removeProfileButton: $('removeProfileButton'), profileName: $('profileName'), material: $('material'),
+    projectName: $('projectName'), profileList: $('profileList'), addProfileButton: $('addProfileButton'),
+    profileName: $('profileName'), material: $('material'),
     sectionType: $('sectionType'), dimensionFields: $('dimensionFields'), stockBody: $('stockBody'),
     addStockButton: $('addStockButton'), kerf: $('kerf'), cutsBody: $('cutsBody'), addCutButton: $('addCutButton'),
     templateButton: $('templateButton'), excelInput: $('excelInput'), optimizeButton: $('optimizeButton'),
@@ -55,13 +55,14 @@
   function activeProfile() { return state.profiles.find(profile => profile.id === state.activeProfileId); }
 
   function updateProfileOptions() {
-    const selected = state.activeProfileId;
-    ui.profileSelect.innerHTML = '';
+    ui.profileList.innerHTML = '';
     state.profiles.forEach((profile, index) => {
-      const option = document.createElement('option'); option.value = profile.id; option.textContent = profile.name || `Perfil ${index + 1}`; ui.profileSelect.appendChild(option);
+      const row = document.createElement('div'); row.className = `profile-list-item${profile.id === state.activeProfileId ? ' active' : ''}`; row.dataset.profileId = profile.id; row.setAttribute('role', 'option'); row.setAttribute('aria-selected', String(profile.id === state.activeProfileId));
+      const select = document.createElement('button'); select.type = 'button'; select.className = 'profile-list-select'; select.innerHTML = `<strong>${escapeHtml(profile.name || `Perfil ${index + 1}`)}</strong><small>${escapeHtml(sectionDefinitions[profile.type]?.label || 'Outro perfil')} · ${escapeHtml(profileDescription(profile))}</small>`;
+      select.addEventListener('click', () => { if (state.activeProfileId === profile.id) return; serializeActiveProfile(); state.activeProfileId = profile.id; renderActiveProfile(); });
+      const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'profile-list-remove'; remove.title = 'Remover perfil'; remove.setAttribute('aria-label', `Remover ${profile.name || `Perfil ${index + 1}`}`); remove.textContent = '×'; remove.disabled = state.profiles.length === 1; remove.addEventListener('click', () => removeProfile(profile.id));
+      row.append(select, remove); ui.profileList.appendChild(row);
     });
-    ui.profileSelect.value = selected;
-    ui.removeProfileButton.disabled = state.profiles.length === 1;
     refreshRelationSelects();
   }
   function profileOptionsMarkup(selectedId) {
@@ -132,6 +133,14 @@
     const profile = activeProfile(); if (!profile) return;
     updateProfileOptions(); ui.profileName.value = profile.name; ui.material.value = profile.material; ui.sectionType.value = profile.type;
     renderDimensionFields(profile);
+  }
+  function removeProfile(profileId) {
+    if (state.profiles.length <= 1) return;
+    serializeActiveProfile();
+    const index = state.profiles.findIndex(profile => profile.id === profileId); if (index < 0) return;
+    state.profiles.splice(index, 1); state.stocks = state.stocks.filter(stock => stock.profileId !== profileId); state.cuts = state.cuts.filter(cut => cut.profileId !== profileId);
+    if (state.activeProfileId === profileId) state.activeProfileId = state.profiles[Math.max(0, index - 1)].id;
+    renderActiveProfile(); renderRelationRows(); invalidateResult(); setMessage('Perfil e suas linhas de barras e cortes foram removidos.');
   }
 
   function profileDescription(profile) {
@@ -443,10 +452,8 @@
     finally { ui.optimizeButton.disabled = false; ui.optimizeButton.firstElementChild.textContent = 'Gerar plano de corte'; }
   }
 
-  ui.profileSelect.addEventListener('change', event => { serializeActiveProfile(); state.activeProfileId = event.target.value; renderActiveProfile(); });
   ui.addProfileButton.addEventListener('click', () => { serializeActiveProfile(); const profile = makeProfile(`Perfil ${state.profiles.length + 1}`); state.profiles.push(profile); state.activeProfileId = profile.id; renderActiveProfile(); invalidateResult(); ui.profileName.focus(); });
-  ui.removeProfileButton.addEventListener('click', () => { if (state.profiles.length <= 1) return; serializeActiveProfile(); const removedId = state.activeProfileId, index = state.profiles.findIndex(profile => profile.id === removedId); state.profiles.splice(index,1); state.stocks = state.stocks.filter(stock => stock.profileId !== removedId); state.cuts = state.cuts.filter(cut => cut.profileId !== removedId); state.activeProfileId = state.profiles[Math.max(0,index-1)].id; renderActiveProfile(); renderRelationRows(); invalidateResult(); setMessage('Perfil e suas linhas de barras e cortes foram removidos.'); });
-  ui.profileName.addEventListener('input', () => { const profile=activeProfile(); if(profile){profile.name=ui.profileName.value; const option=ui.profileSelect.querySelector(`option[value="${profile.id}"]`); if(option) option.textContent=profile.name||'Perfil sem nome'; refreshRelationSelects();} invalidateResult(); });
+  ui.profileName.addEventListener('input', () => { const profile=activeProfile(); if(profile){profile.name=ui.profileName.value; updateProfileOptions();} invalidateResult(); });
   ui.sectionType.addEventListener('change', () => { const profile=activeProfile(); if(!profile)return; profile.type=ui.sectionType.value; profile.dimensions=defaultDimensions(profile.type); renderDimensionFields(profile); invalidateResult(); });
   [ui.projectName,ui.material,ui.kerf].forEach(input => input.addEventListener('change',invalidateResult));
   ui.addStockButton.addEventListener('click', () => addStockRow({profileId:state.activeProfileId,length:6000,quantity:1},true)); ui.addCutButton.addEventListener('click', () => addCutRow({profileId:state.activeProfileId},true));
