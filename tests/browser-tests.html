@@ -14,6 +14,7 @@
         const core = win.PipeSaverCore;
         if (!core) throw new Error('API PipeSaverCore não carregada');
         if (!win.XLSX) throw new Error('SheetJS local não carregado');
+        if (!doc.querySelector('.sidebar').firstElementChild.classList.contains('project-file-panel')) throw new Error('Arquivo do projeto não está acima da etapa 1');
         if (doc.getElementById('emptyState')) throw new Error('O painel vazio ainda está presente');
         if (doc.querySelector('.brand-name').textContent.replace(/\s/g, '') !== 'PipeSaver' || doc.querySelector('.brand small')) throw new Error('A marca PipeSaver não foi compactada corretamente');
         if (core.numberFrom('1.250,5') !== 1250.5) throw new Error('Conversão numérica pt-BR inválida');
@@ -53,6 +54,14 @@
         if (project.profileResults.length !== 2 || project.totalPieces !== 4 || project.totalBars !== 2) throw new Error('Perfis diferentes foram misturados ou não agregados corretamente');
         log.push('Otimizador 1D: OK', 'Kerf: OK', 'Estoque misto e finito: OK', 'Prioridade de barras: OK', 'Projeto multi-perfil: OK', 'Agrupamento de padrões: OK');
 
+        const originalWriteFile = win.XLSX.writeFile; let downloadedWorkbook = null, downloadedName = '';
+        win.XLSX.writeFile = (workbook, name) => { downloadedWorkbook = workbook; downloadedName = name; };
+        doc.getElementById('templateButton').click();
+        const expectedSheets = ['Perfis','Barras','Cortes','Configuracoes','Instrucoes'];
+        if (downloadedWorkbook.SheetNames.join('|') !== expectedSheets.join('|') || downloadedName !== 'modelo_completo_pipesaver.xlsx') throw new Error('Modelo Excel completo não foi gerado');
+        const templateProfileRows = win.XLSX.utils.sheet_to_json(downloadedWorkbook.Sheets.Perfis, {header:1,defval:''});
+        if (!['Diametro_mm','Lado_mm','Largura_mm','Altura_mm','Aba_A_mm','Aba_B_mm','Espessura_mm','Descricao_secao'].every(header => templateProfileRows[0].includes(header)) || templateProfileRows.length < 8 || !downloadedWorkbook.Sheets.Perfis['!autofilter'] || !downloadedWorkbook.Sheets.Barras['!autofilter'] || !downloadedWorkbook.Sheets.Cortes['!autofilter']) throw new Error('Modelo não contém todas as dimensões de seção e filtros');
+
         const cutsBody = doc.getElementById('cutsBody');
         if (cutsBody.children.length !== 1) throw new Error('Lista inicial de medidas inválida');
         if (/\bblank/i.test(doc.body.textContent)) throw new Error('O termo blank ainda aparece na interface');
@@ -89,6 +98,10 @@
 
         const row = cutsBody.children[0];
         row.querySelector('.cut-id').value = 'T01'; row.querySelector('.cut-length').value = '1000'; row.querySelector('.cut-quantity').value = '6';
+        doc.getElementById('projectName').value = 'Projeto salvo';
+        doc.getElementById('saveProjectButton').click();
+        const savedProfiles = win.XLSX.utils.sheet_to_json(downloadedWorkbook.Sheets.Perfis, {defval:''}), savedStocks = win.XLSX.utils.sheet_to_json(downloadedWorkbook.Sheets.Barras, {defval:''}), savedCuts = win.XLSX.utils.sheet_to_json(downloadedWorkbook.Sheets.Cortes, {defval:''}), savedSettings = win.XLSX.utils.sheet_to_json(downloadedWorkbook.Sheets.Configuracoes, {header:1,defval:''});
+        if (!downloadedName.includes('Projeto_salvo_projeto_pipesaver') || savedProfiles.length !== 2 || savedStocks.length !== 2 || savedStocks[1].Priorizar !== 'Sim' || savedCuts[0].Identificacao !== 'T01' || !savedSettings.some(item => item[0] === 'Nome_projeto' && item[1] === 'Projeto salvo')) throw new Error('Salvamento do formulário em Excel falhou');
         doc.getElementById('optimizeButton').click();
         for (let retry = 0; retry < 40 && doc.getElementById('resultContent').hidden; retry++) await wait(50);
         if (doc.getElementById('resultContent').hidden || doc.getElementById('metricBars').textContent !== '2') throw new Error('Fluxo da interface não gerou o plano esperado');
@@ -106,9 +119,9 @@
 
         const fullWorkbook = win.XLSX.utils.book_new();
         win.XLSX.utils.book_append_sheet(fullWorkbook, win.XLSX.utils.aoa_to_sheet([
-          ['Perfil','Material','Tipo_secao','Dimensao_A_mm','Dimensao_B_mm','Espessura_mm'],
-          ['Tubos Ø60','Aço carbono','Tubo redondo',60,'',3],
-          ['Travessas 80x40','Aço carbono','Tubo retangular',80,40,3]
+          ['Perfil','Material','Tipo_secao','Diametro_mm','Lado_mm','Largura_mm','Altura_mm','Aba_A_mm','Aba_B_mm','Espessura_mm','Descricao_secao'],
+          ['Tubos Ø60','Aço carbono','Tubo redondo',60,'','','','','',3,''],
+          ['Travessas 80x40','Aço carbono','Tubo retangular','','',80,40,'','',3,'']
         ]), 'Perfis');
         win.XLSX.utils.book_append_sheet(fullWorkbook, win.XLSX.utils.aoa_to_sheet([
           ['Perfil','Comprimento_barra_mm','Quantidade','Priorizar'],
@@ -117,9 +130,9 @@
           ['Travessas 80x40',12000,4,'Não']
         ]), 'Barras');
         win.XLSX.utils.book_append_sheet(fullWorkbook, win.XLSX.utils.aoa_to_sheet([
-          ['Perfil','Identificacao','Comprimento_mm','Quantidade'],
-          ['Tubos Ø60','TP-01',1200,3],
-          ['Travessas 80x40','TR-01',850,5]
+          ['Perfil','Identificacao','Comprimento_mm','Quantidade','Observacao'],
+          ['Tubos Ø60','TP-01',1200,3,'Corte principal'],
+          ['Travessas 80x40','TR-01',850,5,'Separar por lote']
         ]), 'Cortes');
         win.XLSX.utils.book_append_sheet(fullWorkbook, win.XLSX.utils.aoa_to_sheet([
           ['Configuracao','Valor'],
@@ -136,7 +149,11 @@
         profileItems()[1].querySelector('.profile-list-select').click();
         const secondProfileId = profileItems()[1].dataset.profileId, secondCut = [...cutsBody.children].find(item => item.querySelector('.cut-profile').value === secondProfileId), secondStock = [...stockBody.children].find(item => item.querySelector('.stock-profile').value === secondProfileId);
         if (doc.getElementById('sectionType').value !== 'rectTube' || secondCut?.querySelector('.cut-id').value !== 'TR-01' || secondStock?.querySelector('.stock-length').value !== '12000') throw new Error('Relacionamento entre perfis, barras e cortes importados inválido');
-        log.push('Interface multi-perfil: OK', 'Importação XLSX simples: OK', 'Importação de projeto completo: OK', 'Biblioteca local: OK');
+        doc.getElementById('saveProjectButton').click();
+        const roundTripCuts = win.XLSX.utils.sheet_to_json(downloadedWorkbook.Sheets.Cortes, {defval:''});
+        if (roundTripCuts[0].Observacao !== 'Corte principal' || roundTripCuts[1].Observacao !== 'Separar por lote') throw new Error('Observações não foram preservadas ao reabrir e salvar o projeto');
+        win.XLSX.writeFile = originalWriteFile;
+        log.push('Interface multi-perfil: OK', 'Modelo Excel completo: OK', 'Salvar e retomar projeto: OK', 'Importação XLSX simples: OK', 'Importação de projeto completo: OK', 'Biblioteca local: OK');
         document.getElementById('status').textContent = 'PASS';
       } catch (error) {
         document.getElementById('status').textContent = 'FAIL';

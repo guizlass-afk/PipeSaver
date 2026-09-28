@@ -18,6 +18,15 @@
 
   <main class="app-shell">
     <aside class="sidebar">
+      <section class="panel project-file-panel">
+        <div class="project-file-heading"><div><h2>Arquivo do projeto</h2><p>Comece por uma planilha ou salve para continuar depois</p></div></div>
+        <div class="import-actions">
+          <button id="templateButton" class="ghost-button" type="button"><span aria-hidden="true">⇩</span> Baixar modelo</button>
+          <label class="ghost-button import-button"><span aria-hidden="true">⇧</span> Importar Excel<input id="excelInput" type="file" accept=".xlsx,.xls,.csv" hidden></label>
+          <button id="saveProjectButton" class="ghost-button save-project-button" type="button"><span aria-hidden="true">▣</span> Salvar projeto preenchido</button>
+        </div>
+      </section>
+
       <section class="panel">
         <div class="section-heading"><span>1</span><div><h2>Perfis do projeto</h2><p>Adicione todas as seções deste estudo</p></div></div>
         <label class="field full"><span>Nome do projeto</span><input id="projectName" value="Nova lista de corte" maxlength="80"></label>
@@ -56,11 +65,7 @@
       </section>
 
       <section class="panel cuts-panel">
-        <div class="section-heading"><span>3</span><div><h2>Peças desejadas</h2><p>Digite ou importe de uma planilha</p></div></div>
-        <div class="import-actions">
-          <button id="templateButton" class="ghost-button" type="button"><span aria-hidden="true">⇩</span> Baixar modelo</button>
-          <label class="ghost-button import-button"><span aria-hidden="true">⇧</span> Importar Excel<input id="excelInput" type="file" accept=".xlsx,.xls,.csv" hidden></label>
-        </div>
+        <div class="section-heading"><span>3</span><div><h2>Peças desejadas</h2><p>Relacione cada medida ao perfil correto</p></div></div>
         <div class="cut-columns"><span>Perfil</span><span>Identificação</span><span>Comprimento</span><span>Qtd.</span><span></span></div>
         <div id="cutsBody" class="cuts-list"></div>
         <button id="addCutButton" class="add-row-button" type="button"><span>+</span> Adicionar medida</button>

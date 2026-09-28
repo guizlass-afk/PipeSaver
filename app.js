@@ -7,7 +7,7 @@
     profileName: $('profileName'), material: $('material'),
     sectionType: $('sectionType'), dimensionFields: $('dimensionFields'), stockBody: $('stockBody'),
     addStockButton: $('addStockButton'), kerf: $('kerf'), cutsBody: $('cutsBody'), addCutButton: $('addCutButton'),
-    templateButton: $('templateButton'), excelInput: $('excelInput'), optimizeButton: $('optimizeButton'),
+    templateButton: $('templateButton'), saveProjectButton: $('saveProjectButton'), excelInput: $('excelInput'), optimizeButton: $('optimizeButton'),
     message: $('message'), resultContent: $('resultContent'), resultSubtitle: $('resultSubtitle'),
     metricBars: $('metricBars'), metricUsage: $('metricUsage'), metricPieces: $('metricPieces'),
     metricWaste: $('metricWaste'), profileBadge: $('profileBadge'), barsVisual: $('barsVisual'),
@@ -105,6 +105,7 @@
   }
   function addCutRow(values = {}, focus = false) {
     const row = document.createElement('div'); row.className = 'cut-row'; row.dataset.rowId = values.rowId || `cut-${state.nextCutId++}`;
+    row.dataset.observation = values.observation || '';
     const profileId = values.profileId || state.activeProfileId || state.profiles[0]?.id;
     row.innerHTML = `<select class="cut-input cut-profile" aria-label="Perfil da peça">${profileOptionsMarkup(profileId)}</select><input class="cut-input cut-id" value="${String(values.id ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')}" placeholder="Ex.: P01" maxlength="60" aria-label="Identificação da peça"><input class="cut-input cut-length" type="number" value="${values.length ?? ''}" placeholder="0" min="0.01" step="0.1" aria-label="Comprimento da peça"><input class="cut-input cut-quantity" type="number" value="${values.quantity ?? 1}" min="1" max="9999" step="1" aria-label="Quantidade de peças"><button class="remove-cut" type="button" title="Remover medida" aria-label="Remover medida">×</button>`;
     row.querySelectorAll('input,select').forEach(input => input.addEventListener('change', invalidateResult));
@@ -113,7 +114,7 @@
   }
   function syncRelationRows() {
     state.stocks = [...ui.stockBody.querySelectorAll('.stock-row')].map(row => ({ id: row.dataset.stockId, profileId: row.querySelector('.stock-profile').value, length: row.querySelector('.stock-length').value, quantity: row.querySelector('.stock-quantity').value, priority: row.querySelector('.stock-priority').checked }));
-    state.cuts = [...ui.cutsBody.querySelectorAll('.cut-row')].map(row => ({ rowId: row.dataset.rowId, profileId: row.querySelector('.cut-profile').value, id: row.querySelector('.cut-id').value, length: row.querySelector('.cut-length').value, quantity: row.querySelector('.cut-quantity').value }));
+    state.cuts = [...ui.cutsBody.querySelectorAll('.cut-row')].map(row => ({ rowId: row.dataset.rowId, profileId: row.querySelector('.cut-profile').value, id: row.querySelector('.cut-id').value, length: row.querySelector('.cut-length').value, quantity: row.querySelector('.cut-quantity').value, observation: row.dataset.observation || '' }));
   }
   function renderRelationRows() {
     ui.stockBody.innerHTML = '';
@@ -178,7 +179,7 @@
         const length = numberFrom(rawLength), quantity = Math.trunc(numberFrom(cut.quantity));
         if (!(length > 0)) throw new Error(`Comprimento inválido no perfil “${profile.name}”, linha ${rowIndex + 1}.`);
         if (!(quantity >= 1 && quantity <= 9999)) throw new Error(`Quantidade inválida no perfil “${profile.name}”, linha ${rowIndex + 1}.`);
-        cuts.push({ id: String(cut.id || '').trim() || `P${String(rowIndex + 1).padStart(2, '0')}`, length, quantity, colorIndex: cuts.length }); totalPieces += quantity;
+        cuts.push({ id: String(cut.id || '').trim() || `P${String(rowIndex + 1).padStart(2, '0')}`, length, quantity, observation:cut.observation || '', colorIndex: cuts.length }); totalPieces += quantity;
       });
       if (!cuts.length) return;
       const stocks = state.stocks.filter(stock => stock.profileId === profile.id).map((stock, stockIndex) => {
@@ -342,54 +343,69 @@
   }
 
   function workbookAvailable() { if (window.XLSX) return true; setMessage('O módulo de Excel não foi carregado. Recarregue a página e tente novamente.', 'error'); return false; }
+  const projectSheetHeaders = {
+    profiles: ['Perfil','Material','Tipo_secao','Diametro_mm','Lado_mm','Largura_mm','Altura_mm','Aba_A_mm','Aba_B_mm','Espessura_mm','Descricao_secao'],
+    stocks: ['Perfil','Comprimento_barra_mm','Quantidade','Priorizar'],
+    cuts: ['Perfil','Identificacao','Comprimento_mm','Quantidade','Observacao'],
+    settings: ['Configuracao','Valor']
+  };
+  const workbookInstructions = [
+    ['PIPESAVER — ARQUIVO COMPLETO DO PROJETO'],
+    ['Este arquivo pode ser preenchido do zero ou gerado pelo botão Salvar projeto preenchido para continuar o trabalho mais tarde.'],
+    ['1. Perfis', 'Cadastre uma linha por seção. Use somente as colunas de dimensão aplicáveis ao tipo escolhido.'],
+    ['2. Barras', 'Informe perfil, comprimento, quantidade e Sim em Priorizar quando desejar consumir aquela barra antes das demais.'],
+    ['3. Cortes', 'Relacione cada medida ao nome exato do perfil. Observacao é opcional e fica preservada no arquivo.'],
+    ['4. Configuracoes', 'Nome_projeto e Espessura_corte_mm são lidos pelo site. Unidade deve permanecer mm.'],
+    ['Tipos de seção aceitos', 'Tubo redondo, Tubo quadrado, Tubo retangular, Barra redonda, Barra chata, Cantoneira e Outro perfil.'],
+    ['Dimensões por tipo', 'Tubo redondo: Diametro_mm + Espessura_mm | Tubo quadrado: Lado_mm + Espessura_mm | Tubo retangular: Largura_mm + Altura_mm + Espessura_mm | Barra redonda: Diametro_mm | Barra chata: Largura_mm + Espessura_mm | Cantoneira: Aba_A_mm + Aba_B_mm + Espessura_mm | Outro perfil: Descricao_secao.'],
+    ['Importante', 'Não altere os nomes das abas. Os nomes usados em Barras e Cortes devem ser idênticos aos da aba Perfis.']
+  ];
+  function buildProjectWorkbook(profileRows, stockRows, cutRows, settingsRows) {
+    const profiles = XLSX.utils.aoa_to_sheet([projectSheetHeaders.profiles, ...profileRows]), stocks = XLSX.utils.aoa_to_sheet([projectSheetHeaders.stocks, ...stockRows]), cuts = XLSX.utils.aoa_to_sheet([projectSheetHeaders.cuts, ...cutRows]), settings = XLSX.utils.aoa_to_sheet([projectSheetHeaders.settings, ...settingsRows]), instructions = XLSX.utils.aoa_to_sheet(workbookInstructions);
+    profiles['!cols'] = [{wch:22},{wch:18},{wch:20},{wch:15},{wch:13},{wch:15},{wch:14},{wch:13},{wch:13},{wch:17},{wch:34}]; stocks['!cols'] = [{wch:22},{wch:24},{wch:14},{wch:14}]; cuts['!cols'] = [{wch:22},{wch:20},{wch:20},{wch:14},{wch:42}]; settings['!cols'] = [{wch:26},{wch:30}]; instructions['!cols'] = [{wch:30},{wch:125}];
+    profiles['!autofilter'] = { ref:profiles['!ref'] }; stocks['!autofilter'] = { ref:stocks['!ref'] }; cuts['!autofilter'] = { ref:cuts['!ref'] };
+    const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, profiles, 'Perfis'); XLSX.utils.book_append_sheet(workbook, stocks, 'Barras'); XLSX.utils.book_append_sheet(workbook, cuts, 'Cortes'); XLSX.utils.book_append_sheet(workbook, settings, 'Configuracoes'); XLSX.utils.book_append_sheet(workbook, instructions, 'Instrucoes'); return workbook;
+  }
+  function profileSheetRow(profile) {
+    const d = profile.dimensions || {};
+    return [profile.name, profile.material, sectionDefinitions[profile.type]?.label || 'Outro perfil', d.diameter ?? '', d.side ?? '', d.width ?? '', d.height ?? '', d.legA ?? '', d.legB ?? '', d.thickness ?? '', d.description ?? ''];
+  }
   function downloadTemplate() {
     if (!workbookAvailable()) return;
-    const profiles = XLSX.utils.aoa_to_sheet([
-      ['Perfil', 'Material', 'Tipo_secao', 'Dimensao_A_mm', 'Dimensao_B_mm', 'Espessura_mm'],
-      ['Perfil 1', 'Aço carbono', 'Tubo redondo', 60, '', 3],
-      ['Perfil 2', 'Aço carbono', 'Tubo retangular', 80, 40, 3]
-    ]);
-    const stocks = XLSX.utils.aoa_to_sheet([
-      ['Perfil', 'Comprimento_barra_mm', 'Quantidade', 'Priorizar'],
-      ['Perfil 1', 6000, 2, 'Não'],
-      ['Perfil 1', 4000, 1, 'Sim'],
-      ['Perfil 2', 6000, 4, 'Não']
-    ]);
-    const cuts = XLSX.utils.aoa_to_sheet([
-      ['Perfil', 'Identificacao', 'Comprimento_mm', 'Quantidade', 'Observacao'],
-      ['Perfil 1', 'P01', 1200, 4, 'Exemplo — substitua esta linha'],
-      ['Perfil 2', 'P02', 850, 6, 'Exemplo — substitua esta linha']
-    ]);
-    const settings = XLSX.utils.aoa_to_sheet([
-      ['Configuracao', 'Valor'],
-      ['Nome_projeto', 'Novo projeto'],
-      ['Espessura_corte_mm', 3]
-    ]);
-    const instructions = XLSX.utils.aoa_to_sheet([
-      ['MODELO PIPESAVER — PROJETO COMPLETO'],
-      ['1. Cadastre uma única vez cada seção na aba Perfis. O nome do perfil pode ser editado.'],
-      ['2. Na aba Barras, informe todos os comprimentos e quantidades disponíveis para cada perfil.'],
-      ['Marque Sim na coluna Priorizar quando quiser consumir aquela barra antes das demais.'],
-      ['3. Na aba Cortes, relacione cada medida ao nome exato do perfil correspondente.'],
-      ['4. Ajuste o nome do projeto e a espessura da ferramenta na aba Configuracoes.'],
-      ['Tipos aceitos', 'Tubo redondo, Tubo quadrado, Tubo retangular, Barra redonda, Barra chata, Cantoneira e Outro perfil.']
-    ]);
-    profiles['!cols'] = [{wch:20},{wch:18},{wch:20},{wch:17},{wch:17},{wch:17}]; stocks['!cols'] = [{wch:20},{wch:24},{wch:14},{wch:14}]; cuts['!cols'] = [{wch:20},{wch:20},{wch:20},{wch:14},{wch:38}]; settings['!cols'] = [{wch:24},{wch:24}]; instructions['!cols'] = [{wch:34},{wch:100}];
-    const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, profiles, 'Perfis'); XLSX.utils.book_append_sheet(workbook, stocks, 'Barras'); XLSX.utils.book_append_sheet(workbook, cuts, 'Cortes'); XLSX.utils.book_append_sheet(workbook, settings, 'Configuracoes'); XLSX.utils.book_append_sheet(workbook, instructions, 'Instrucoes'); XLSX.writeFile(workbook, 'modelo_projeto_pipesaver.xlsx'); setMessage('Modelo de projeto completo baixado.', 'success');
+    const profileRows = [
+      ['Perfil 1','Aço carbono','Tubo redondo',60,'','','','','',3,''],
+      ['Perfil 2','Aço carbono','Tubo quadrado','',50,'','','','',3,''],
+      ['Perfil 3','Aço carbono','Tubo retangular','','',80,40,'','',3,''],
+      ['Perfil 4','Aço carbono','Barra redonda',30,'','','','','','',''],
+      ['Perfil 5','Aço carbono','Barra chata','','',50,'','','',6,''],
+      ['Perfil 6','Aço carbono','Cantoneira','','','','',50,50,5,''],
+      ['Perfil 7','Aço carbono','Outro perfil','','','','','','','','Descrição livre da seção']
+    ];
+    const workbook = buildProjectWorkbook(profileRows, [['Perfil 1',6000,2,'Não'],['Perfil 1',4000,1,'Sim'],['Perfil 3',6000,4,'Não']], [['Perfil 1','P01',1200,4,'Exemplo — substitua esta linha'],['Perfil 3','P02',850,6,'Exemplo — substitua esta linha']], [['Versao_modelo',2],['Nome_projeto','Novo projeto'],['Espessura_corte_mm',3],['Unidade','mm']]);
+    XLSX.writeFile(workbook, 'modelo_completo_pipesaver.xlsx'); setMessage('Modelo completo baixado.', 'success');
+  }
+  function saveProjectExcel() {
+    if (!workbookAvailable()) return;
+    serializeActiveProfile();
+    const profileName = new Map(state.profiles.map(profile => [profile.id, profile.name || 'Perfil sem nome']));
+    const profileRows = state.profiles.map(profileSheetRow), stockRows = state.stocks.map(stock => [profileName.get(stock.profileId) || '', stock.length, stock.quantity, stock.priority ? 'Sim' : 'Não']), cutRows = state.cuts.map(cut => [profileName.get(cut.profileId) || '', cut.id, cut.length, cut.quantity, cut.observation || '']);
+    const workbook = buildProjectWorkbook(profileRows, stockRows, cutRows, [['Versao_modelo',2],['Nome_projeto',ui.projectName.value],['Espessura_corte_mm',ui.kerf.value],['Unidade','mm'],['Salvo_em',new Date().toLocaleString('pt-BR')]]);
+    XLSX.writeFile(workbook, `${safeFileName(ui.projectName.value)}_projeto_pipesaver.xlsx`); setMessage('Projeto preenchido salvo. Importe este arquivo para continuar depois.', 'success');
   }
   function findHeader(headers, aliases) { return headers.find(header => aliases.includes(normalizeHeader(header))); }
   function sectionTypeFrom(value) {
     const key = normalizeHeader(value), aliases = { roundTube:['tuboredondo','roundtube'], squareTube:['tuboquadrado','squaretube'], rectTube:['tuboretangular','recttube'], roundBar:['barraredonda','roundbar'], flatBar:['barrachata','flatbar'], angle:['cantoneira','angle'], custom:['outroperfil','personalizado','custom'] };
     return Object.keys(aliases).find(type => aliases[type].includes(key)) || 'custom';
   }
-  function dimensionsFromSheet(type, a, b, thickness) {
-    if (type === 'roundTube') return { diameter:a, thickness };
-    if (type === 'squareTube') return { side:a, thickness };
-    if (type === 'rectTube') return { width:a, height:b, thickness };
-    if (type === 'roundBar') return { diameter:a };
-    if (type === 'flatBar') return { width:a, thickness: thickness || b };
-    if (type === 'angle') return { legA:a, legB:b, thickness };
-    return { description:String(a || 'Perfil personalizado') };
+  function dimensionsFromSheet(type, row, columns) {
+    const value = (header, fallback = '') => header ? row[header] : fallback, a = value(columns.genericA), b = value(columns.genericB), thickness = value(columns.thickness);
+    if (type === 'roundTube') return { diameter:value(columns.diameter,a), thickness };
+    if (type === 'squareTube') return { side:value(columns.side,a), thickness };
+    if (type === 'rectTube') return { width:value(columns.width,a), height:value(columns.height,b), thickness };
+    if (type === 'roundBar') return { diameter:value(columns.diameter,a) };
+    if (type === 'flatBar') return { width:value(columns.width,a), thickness:thickness || b };
+    if (type === 'angle') return { legA:value(columns.legA,a), legB:value(columns.legB,b), thickness };
+    return { description:String(value(columns.description,a) || 'Perfil personalizado') };
   }
   async function importExcel(file) {
     if (!workbookAvailable()) return;
@@ -399,13 +415,13 @@
       const profilesSheetName = workbook.SheetNames.find(name => normalizeHeader(name) === 'perfis'); let importedProfiles = null, importedStocks = [], importedCuts = [], importedKerf = null;
       if (profilesSheetName) {
         const rows = XLSX.utils.sheet_to_json(workbook.Sheets[profilesSheetName], { defval:'' }); if (!rows.length) throw new Error('A aba Perfis está vazia.');
-        const headers = Object.keys(rows[0]), profileHeader = findHeader(headers,['perfil','profile']), materialHeader = findHeader(headers,['material']), typeHeader = findHeader(headers,['tiposecao','tipoperfil','sectiontype']), aHeader = findHeader(headers,['dimensaoamm','dimensaoa','diametroexternomm','larguramm']), bHeader = findHeader(headers,['dimensaobmm','dimensaob','alturamm']), thicknessHeader = findHeader(headers,['espessuramm','espessura']), kerfHeader = findHeader(headers,['kerfmm','kerf','espessuradecortemm']), legacyLengthHeader = findHeader(headers,['comprimentoblankmm','comprimentoblank']), legacyQuantityHeader = findHeader(headers,['quantidadeblank','qtdblank']), legacyKindHeader = findHeader(headers,['tipoblank','origemblank']), legacyPriorityHeader = findHeader(headers,['priorizar','prioridade','prioritario']);
+        const headers = Object.keys(rows[0]), profileHeader = findHeader(headers,['perfil','profile']), materialHeader = findHeader(headers,['material']), typeHeader = findHeader(headers,['tiposecao','tipoperfil','sectiontype']), dimensionColumns = { genericA:findHeader(headers,['dimensaoamm','dimensaoa']), genericB:findHeader(headers,['dimensaobmm','dimensaob']), diameter:findHeader(headers,['diametromm','diametroexternomm','diametroexterno','diametro']), side:findHeader(headers,['ladomm','lado']), width:findHeader(headers,['larguramm','largura']), height:findHeader(headers,['alturamm','altura']), legA:findHeader(headers,['abaamm','abaa','legamm','lega']), legB:findHeader(headers,['ababmm','abab','legbmm','legb']), thickness:findHeader(headers,['espessuramm','espessura']), description:findHeader(headers,['descricaosecao','descricao','perfilpersonalizado']) }, kerfHeader = findHeader(headers,['kerfmm','kerf','espessuradecortemm']), legacyLengthHeader = findHeader(headers,['comprimentoblankmm','comprimentoblank']), legacyQuantityHeader = findHeader(headers,['quantidadeblank','qtdblank']), legacyKindHeader = findHeader(headers,['tipoblank','origemblank']), legacyPriorityHeader = findHeader(headers,['priorizar','prioridade','prioritario']);
         if (!profileHeader) throw new Error('A aba Perfis deve conter a coluna Perfil.');
         const map = new Map();
         rows.forEach((row, index) => {
           const name = String(row[profileHeader]).trim(); if (!name) throw new Error(`Perfil vazio na linha ${index + 2}.`);
           const key = normalizeHeader(name); let profile = map.get(key);
-          if (!profile) { profile = makeProfile(name); profile.material = String(materialHeader ? row[materialHeader] : '').trim() || 'Não informado'; profile.type = sectionTypeFrom(typeHeader ? row[typeHeader] : 'Outro perfil'); profile.dimensions = dimensionsFromSheet(profile.type, aHeader ? row[aHeader] : '', bHeader ? row[bHeader] : '', thicknessHeader ? row[thicknessHeader] : ''); map.set(key, profile); }
+          if (!profile) { profile = makeProfile(name); profile.material = String(materialHeader ? row[materialHeader] : '').trim() || 'Não informado'; profile.type = sectionTypeFrom(typeHeader ? row[typeHeader] : 'Outro perfil'); profile.dimensions = dimensionsFromSheet(profile.type, row, dimensionColumns); map.set(key, profile); }
           if (kerfHeader && String(row[kerfHeader]).trim() !== '' && importedKerf === null) importedKerf = row[kerfHeader];
           if (legacyLengthHeader && String(row[legacyLengthHeader]).trim() !== '') { const length = numberFrom(row[legacyLengthHeader]), rawQuantity = legacyQuantityHeader ? String(row[legacyQuantityHeader]).trim() : ''; const quantity = rawQuantity === '' ? 1 : Math.trunc(numberFrom(rawQuantity)), priority = booleanFrom(legacyPriorityHeader ? row[legacyPriorityHeader] : '') || normalizeHeader(legacyKindHeader ? row[legacyKindHeader] : '') === 'retalho'; if (!(length > 0) || !(quantity >= 1)) throw new Error(`Barra inválida na linha ${index + 2} da aba Perfis.`); importedStocks.push({ id:`stock-${state.nextStockId++}`, profileKey:key, length, quantity, priority }); }
         });
@@ -417,7 +433,7 @@
           const stockRows = XLSX.utils.sheet_to_json(workbook.Sheets[stocksSheetName], { defval:'' }); if (!stockRows.length) throw new Error('A aba Barras está vazia.');
           const stockHeaders = Object.keys(stockRows[0]), stockProfileHeader = findHeader(stockHeaders,['perfil','profile']), stockLengthHeader = findHeader(stockHeaders,['comprimentobarramm','comprimentobarra','comprimentomm','comprimento']), stockQuantityHeader = findHeader(stockHeaders,['quantidade','qtd','qtde','quantity','qty']), stockPriorityHeader = findHeader(stockHeaders,['priorizar','prioridade','prioritario']);
           if (!stockProfileHeader || !stockLengthHeader || !stockQuantityHeader) throw new Error('A aba Barras deve conter Perfil, Comprimento_barra_mm e Quantidade.');
-          stockRows.forEach((row, index) => { const profileKey = normalizeHeader(row[stockProfileHeader]), length = numberFrom(row[stockLengthHeader]), quantity = Math.trunc(numberFrom(row[stockQuantityHeader])), priority = booleanFrom(stockPriorityHeader ? row[stockPriorityHeader] : ''); if (!map.has(profileKey)) throw new Error(`Perfil não encontrado na linha ${index + 2} da aba Barras.`); if (!(length > 0) || !(quantity >= 1)) throw new Error(`Barra inválida na linha ${index + 2} da aba Barras.`); importedStocks.push({ id:`stock-${state.nextStockId++}`, profileKey, length, quantity, priority }); });
+          stockRows.forEach((row, index) => { const profileKey = normalizeHeader(row[stockProfileHeader]), rawLength = String(row[stockLengthHeader]).trim(), rawQuantity = String(row[stockQuantityHeader]).trim(), length = rawLength === '' ? '' : numberFrom(rawLength), quantity = rawQuantity === '' ? 1 : Math.trunc(numberFrom(rawQuantity)), priority = booleanFrom(stockPriorityHeader ? row[stockPriorityHeader] : ''); if (!map.has(profileKey)) throw new Error(`Perfil não encontrado na linha ${index + 2} da aba Barras.`); if ((rawLength !== '' && !(length > 0)) || !(quantity >= 1)) throw new Error(`Barra inválida na linha ${index + 2} da aba Barras.`); importedStocks.push({ id:`stock-${state.nextStockId++}`, profileKey, length, quantity, priority }); });
         }
         if (!importedStocks.length) throw new Error('Adicione ao menos uma barra na aba Barras.');
 
@@ -427,17 +443,17 @@
           settingsRows.slice(1).forEach(row => { const key = normalizeHeader(row[0]); if (key === 'nomeprojeto' && String(row[1]).trim()) ui.projectName.value = String(row[1]).trim(); if (['espessuracortemm','kerfmm','kerf'].includes(key) && String(row[1]).trim() !== '') importedKerf = row[1]; });
         }
       }
-      const headers = Object.keys(cutRows[0]), profileHeader = findHeader(headers,['perfil','profile']), idHeader = findHeader(headers,['identificacao','id','codigo','peca','descricao','nome']), lengthHeader = findHeader(headers,['comprimentomm','comprimento','medidamm','medida','lengthmm','length']), quantityHeader = findHeader(headers,['quantidade','qtd','qtde','quantity','qty']);
+      const headers = Object.keys(cutRows[0]), profileHeader = findHeader(headers,['perfil','profile']), idHeader = findHeader(headers,['identificacao','id','codigo','peca','descricao','nome']), lengthHeader = findHeader(headers,['comprimentomm','comprimento','medidamm','medida','lengthmm','length']), quantityHeader = findHeader(headers,['quantidade','qtd','qtde','quantity','qty']), observationHeader = findHeader(headers,['observacao','obs','nota','notes']);
       if (!lengthHeader || !quantityHeader) throw new Error('A aba Cortes deve conter Comprimento_mm e Quantidade.');
       if (importedProfiles) {
         const map = new Map(importedProfiles.map(profile => [normalizeHeader(profile.name), profile]));
         if (!profileHeader) throw new Error('A aba Cortes deve conter a coluna Perfil.');
-        cutRows.forEach((row, index) => { const profileKey = normalizeHeader(row[profileHeader]), profile = map.get(profileKey); if (!profile) throw new Error(`Perfil não encontrado na linha ${index + 2} da aba Cortes.`); const length = numberFrom(row[lengthHeader]), quantity = Math.trunc(numberFrom(row[quantityHeader])); if (!(length > 0) || !(quantity >= 1)) throw new Error(`Corte inválido na linha ${index + 2}.`); importedCuts.push({ rowId:`cut-${state.nextCutId++}`, profileId:profile.id, id:String(idHeader ? row[idHeader] : '').trim() || `P${index + 1}`, length, quantity }); });
+        cutRows.forEach((row, index) => { const profileKey = normalizeHeader(row[profileHeader]), profile = map.get(profileKey); if (!profile) throw new Error(`Perfil não encontrado na linha ${index + 2} da aba Cortes.`); const rawLength = String(row[lengthHeader]).trim(), rawQuantity = String(row[quantityHeader]).trim(), length = rawLength === '' ? '' : numberFrom(rawLength), quantity = rawQuantity === '' ? 1 : Math.trunc(numberFrom(rawQuantity)); if ((rawLength !== '' && !(length > 0)) || !(quantity >= 1)) throw new Error(`Corte inválido na linha ${index + 2}.`); importedCuts.push({ rowId:`cut-${state.nextCutId++}`, profileId:profile.id, id:String(idHeader ? row[idHeader] : '').trim(), length, quantity, observation:String(observationHeader ? row[observationHeader] : '').trim() }); });
         importedStocks.forEach(stock => { stock.profileId = map.get(stock.profileKey).id; delete stock.profileKey; });
         state.profiles = importedProfiles; state.stocks = importedStocks; state.cuts = importedCuts; state.activeProfileId = importedProfiles[0].id; if (importedKerf !== null) ui.kerf.value = importedKerf;
       } else {
         serializeActiveProfile(); const profile = activeProfile(); state.cuts = state.cuts.filter(cut => cut.profileId !== profile.id);
-        cutRows.forEach((row, index) => { const length = numberFrom(row[lengthHeader]), quantity = Math.trunc(numberFrom(row[quantityHeader])); if (!(length > 0) || !(quantity >= 1)) throw new Error(`Dados inválidos na linha ${index + 2}.`); state.cuts.push({ rowId:`cut-${state.nextCutId++}`, profileId:profile.id, id:String(idHeader ? row[idHeader] : '').trim() || `P${index + 1}`, length, quantity }); });
+        cutRows.forEach((row, index) => { const length = numberFrom(row[lengthHeader]), quantity = Math.trunc(numberFrom(row[quantityHeader])); if (!(length > 0) || !(quantity >= 1)) throw new Error(`Dados inválidos na linha ${index + 2}.`); state.cuts.push({ rowId:`cut-${state.nextCutId++}`, profileId:profile.id, id:String(idHeader ? row[idHeader] : '').trim() || `P${index + 1}`, length, quantity, observation:String(observationHeader ? row[observationHeader] : '').trim() }); });
       }
       renderActiveProfile(); renderRelationRows(); invalidateResult(); setMessage(`${cutRows.length} medida(s) e ${importedProfiles ? importedProfiles.length : 1} perfil(is) importado(s) de “${file.name}”.`, 'success');
     } catch (error) { setMessage(error.message, 'error'); }
@@ -445,13 +461,13 @@
   }
   function exportResult() {
     if (!state.result || !workbookAvailable()) return;
-    const project = state.result, summaryData = [['PIPESAVER — PROJETO COMPLETO'],['Projeto',project.config.projectName],['Perfis',project.profileResults.length],['Barras utilizadas',project.totalBars],['Peças',project.totalPieces],['Aproveitamento (%)',Number(project.utilization.toFixed(2))],['Perda de corte (mm)',Number(project.totalKerfLoss.toFixed(2))],['Sobra total (mm)',Number(project.totalWaste.toFixed(2))],['Gerado em',project.createdAt.toLocaleString('pt-BR')]], stockData = [['Perfil','Material','Seção','Comprimento_barra_mm','Quantidade_disponivel','Priorizar','Quantidade_utilizada']], planData = [['Perfil','Barra','Padrão','Comprimento_barra_mm','Prioritária','Ordem','Identificação','Comprimento_mm','Kerf_apos_mm','Usado_barra_mm','Sobra_barra_mm']], demandData = [['Perfil','Identificacao','Comprimento_mm','Quantidade']];
+    const project = state.result, summaryData = [['PIPESAVER — PROJETO COMPLETO'],['Projeto',project.config.projectName],['Perfis',project.profileResults.length],['Barras utilizadas',project.totalBars],['Peças',project.totalPieces],['Aproveitamento (%)',Number(project.utilization.toFixed(2))],['Perda de corte (mm)',Number(project.totalKerfLoss.toFixed(2))],['Sobra total (mm)',Number(project.totalWaste.toFixed(2))],['Gerado em',project.createdAt.toLocaleString('pt-BR')]], stockData = [['Perfil','Material','Seção','Comprimento_barra_mm','Quantidade_disponivel','Priorizar','Quantidade_utilizada']], planData = [['Perfil','Barra','Padrão','Comprimento_barra_mm','Prioritária','Ordem','Identificação','Comprimento_mm','Kerf_apos_mm','Usado_barra_mm','Sobra_barra_mm']], demandData = [['Perfil','Identificacao','Comprimento_mm','Quantidade','Observacao']];
     project.profileResults.forEach(result => {
       const usage = new Map(); result.bins.forEach(bin => usage.set(bin.stockType.id,(usage.get(bin.stockType.id)||0)+1));
       result.config.stockTypes.forEach(stock => stockData.push([result.config.name,result.config.material,profileDescription(result.config),stock.length,stock.quantity,stock.priority?'Sim':'Não',usage.get(stock.id)||0]));
       const patternMap = new Map(); groupedPatterns(result).forEach((group,index) => group.bins.forEach(bar => patternMap.set(bar,`PC-${String(index+1).padStart(2,'0')}`)));
       result.bins.forEach((bin,barIndex) => bin.items.forEach((item,itemIndex) => planData.push([result.config.name,barIndex+1,patternMap.get(barIndex+1),bin.stockLength,bin.stockType.priority?'Sim':'Não',itemIndex+1,item.id,item.length,itemIndex<bin.items.length-1?result.config.kerf:0,Number(bin.used.toFixed(3)),Number(bin.waste.toFixed(3))])));
-      result.config.cuts.forEach(cut => demandData.push([result.config.name,cut.id,cut.length,cut.quantity]));
+      result.config.cuts.forEach(cut => demandData.push([result.config.name,cut.id,cut.length,cut.quantity,cut.observation||'']));
     });
     const workbook = XLSX.utils.book_new(); [['Resumo',summaryData],['Estoque',stockData],['Plano_de_corte',planData],['Demanda',demandData]].forEach(([name,data]) => XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet(data),name)); XLSX.writeFile(workbook,`${safeFileName(project.config.projectName)}_pipesaver.xlsx`); setMessage('Projeto completo exportado para Excel.','success');
   }
@@ -466,7 +482,7 @@
   ui.sectionType.addEventListener('change', () => { const profile=activeProfile(); if(!profile)return; profile.type=ui.sectionType.value; profile.dimensions=defaultDimensions(profile.type); renderDimensionFields(profile); invalidateResult(); });
   [ui.projectName,ui.material,ui.kerf].forEach(input => input.addEventListener('change',invalidateResult));
   ui.addStockButton.addEventListener('click', () => addStockRow({profileId:state.activeProfileId,length:6000,quantity:1},true)); ui.addCutButton.addEventListener('click', () => addCutRow({profileId:state.activeProfileId},true));
-  ui.templateButton.addEventListener('click',downloadTemplate); ui.excelInput.addEventListener('change',event => event.target.files[0]&&importExcel(event.target.files[0])); ui.optimizeButton.addEventListener('click',executeOptimization); ui.exportButton.addEventListener('click',exportResult); ui.printButton.addEventListener('click',()=>window.print());
+  ui.templateButton.addEventListener('click',downloadTemplate); ui.saveProjectButton.addEventListener('click',saveProjectExcel); ui.excelInput.addEventListener('change',event => event.target.files[0]&&importExcel(event.target.files[0])); ui.optimizeButton.addEventListener('click',executeOptimization); ui.exportButton.addEventListener('click',exportResult); ui.printButton.addEventListener('click',()=>window.print());
 
   const firstProfile = makeProfile('Perfil 1'); state.profiles.push(firstProfile); state.activeProfileId = firstProfile.id; state.stocks.push({id:`stock-${state.nextStockId++}`,profileId:firstProfile.id,length:6000,quantity:1}); state.cuts.push({rowId:`cut-${state.nextCutId++}`,profileId:firstProfile.id,id:'',length:'',quantity:1}); renderActiveProfile(); renderRelationRows();
   window.PipeSaverCore = Object.freeze({ optimizeCuttingList, optimizeProject, groupedPatterns, profileDescription, numberFrom });

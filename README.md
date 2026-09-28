@@ -13,6 +13,7 @@ Aplicação publicada: [guizlass-afk.github.io/PipeSaver](https://guizlass-afk.g
 - espessura de corte (*kerf*) configurável para o estudo;
 - lista de peças em que cada medida seleciona o perfil correspondente;
 - modelo Excel de projeto completo para download e importação de `.xlsx`, `.xls` e `.csv`;
+- salvamento do formulário preenchido em Excel para interromper e retomar projetos grandes sem perder dados;
 - mapa visual separado por perfil e agrupamento de padrões de corte repetidos;
 - consolidação de barras, peças, aproveitamento, perda de corte e sobra do projeto inteiro;
 - exportação detalhada do resultado para Excel e versão preparada para impressão.
@@ -20,12 +21,13 @@ Aplicação publicada: [guizlass-afk.github.io/PipeSaver](https://guizlass-afk.g
 ## Como usar
 
 1. Abra `index.html` em um navegador moderno.
-2. Em **Perfis do projeto**, cadastre cada seção uma única vez. Os nomes `Perfil 1`, `Perfil 2` etc. podem ser editados.
-3. Em **Barras disponíveis**, escolha o perfil de cada linha e informe o comprimento e a quantidade existente. Marque **Priorizar** quando aquela barra deve ser consumida antes das demais.
-4. Informe a espessura consumida pela ferramenta de corte.
-5. Em **Peças desejadas**, selecione o perfil de cada medida e informe identificação, comprimento final e quantidade.
-6. Se preferir, clique em **Baixar modelo**, preencha as abas `Perfis`, `Barras`, `Cortes` e `Configuracoes` e importe o projeto inteiro.
-7. Clique em **Gerar plano de corte**, confira o mapa separado por perfil e exporte o relatório Excel.
+2. No bloco **Arquivo do projeto**, baixe o modelo para começar por Excel ou importe um projeto salvo anteriormente.
+3. Em **Perfis do projeto**, cadastre cada seção uma única vez. Os nomes `Perfil 1`, `Perfil 2` etc. podem ser editados.
+4. Em **Barras disponíveis**, escolha o perfil de cada linha e informe o comprimento e a quantidade existente. Marque **Priorizar** quando aquela barra deve ser consumida antes das demais.
+5. Informe a espessura consumida pela ferramenta de corte.
+6. Em **Peças desejadas**, selecione o perfil de cada medida e informe identificação, comprimento final e quantidade.
+7. Use **Salvar projeto preenchido** a qualquer momento para baixar uma planilha com todo o formulário, inclusive linhas ainda incompletas. Importe o mesmo arquivo para continuar depois.
+8. Clique em **Gerar plano de corte**, confira o mapa separado por perfil e exporte o relatório Excel.
 
 Na aba `Perfis`, cadastre uma única linha para cada seção:
 
@@ -34,9 +36,14 @@ Na aba `Perfis`, cadastre uma única linha para cada seção:
 | `Perfil` | Nome que relaciona seção, estoque e peças |
 | `Material` | Material do perfil |
 | `Tipo_secao` | Tubo redondo, tubo quadrado, tubo retangular, barra redonda, barra chata, cantoneira ou outro perfil |
-| `Dimensao_A_mm` | Diâmetro, lado, largura ou descrição, conforme o tipo |
-| `Dimensao_B_mm` | Altura ou segunda aba, quando aplicável |
+| `Diametro_mm` | Diâmetro de tubos ou barras redondas |
+| `Lado_mm` | Lado do tubo quadrado |
+| `Largura_mm` | Largura de tubos retangulares e barras chatas |
+| `Altura_mm` | Altura do tubo retangular |
+| `Aba_A_mm` | Primeira aba da cantoneira |
+| `Aba_B_mm` | Segunda aba da cantoneira |
 | `Espessura_mm` | Espessura da seção, quando aplicável |
+| `Descricao_secao` | Descrição livre para outro perfil |
 
 Na aba `Barras`:
 
@@ -57,7 +64,7 @@ Na aba `Cortes`:
 | `Quantidade` | Número inteiro de peças |
 | `Observacao` | Opcional; não interfere no cálculo |
 
-Planilhas antigas contendo apenas a aba `Cortes` continuam aceitas; nesse caso, as medidas são importadas para o perfil que está aberto na tela.
+As observações são preservadas quando um arquivo é importado e salvo novamente. Planilhas antigas contendo apenas a aba `Cortes` continuam aceitas; nesse caso, as medidas são importadas para o perfil que está aberto na tela.
 
 Na aba `Configuracoes`, informe `Nome_projeto` e `Espessura_corte_mm`.
 

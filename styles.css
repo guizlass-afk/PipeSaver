@@ -56,6 +56,8 @@ button { color: inherit; }
 .remove-stock { width: 27px; height: 31px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #99a6ac; font-size: 17px; cursor: pointer; }.remove-stock:hover:not(:disabled) { color: var(--danger); background: #fff0ee; }.remove-stock:disabled { opacity: .25; cursor: default; }
 .stock-add-button { margin-top: 8px; }.tool-field { width: calc(50% - 5px); margin-top: 11px; }
 .import-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 10px; }
+.save-project-button { grid-column: 1 / -1; background: var(--teal-soft); border-color: #b9deda; color: var(--teal-dark); }
+.project-file-panel { padding: 12px; border-color: #b9deda; background: linear-gradient(135deg,#f8fdfc,#f1f8f8); }.project-file-heading h2 { margin: 0; font-size: 13px; }.project-file-heading p { margin: 2px 0 9px; color: var(--muted); font-size: 9px; }.project-file-panel .import-actions { margin-bottom: 0; }
 .ghost-button, .add-row-button { min-height: 34px; display: flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid #cbd7db; border-radius: 7px; background: #fff; color: #42545e; font-size: 10px; font-weight: 750; cursor: pointer; }
 .ghost-button:hover, .add-row-button:hover { border-color: var(--teal); color: var(--teal-dark); background: var(--teal-soft); }
 .ghost-button span { color: var(--teal); font-size: 15px; }.import-button { position: relative; }
