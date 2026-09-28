@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><title>Testes PipeSaver</title></head>
+<body>
+  <h1 id="status">RUNNING</h1>
+  <pre id="details"></pre>
+  <iframe id="app" src="../index.html" style="position:absolute;width:1px;height:1px;opacity:0"></iframe>
+  <script>
+    const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+    document.getElementById('app').addEventListener('load', async () => {
+      const log = [];
+      try {
+        const frame = document.getElementById('app'), win = frame.contentWindow, doc = frame.contentDocument;
+        const core = win.PipeSaverCore;
+        if (!core) throw new Error('API PipeSaverCore não carregada');
+        if (!win.XLSX) throw new Error('SheetJS local não carregado');
+        if (doc.getElementById('emptyState')) throw new Error('O painel vazio ainda está presente');
+        if (doc.querySelector('.brand-name').textContent.replace(/\s/g, '') !== 'PipeSaver' || doc.querySelector('.brand small')) throw new Error('A marca PipeSaver não foi compactada corretamente');
+        if (core.numberFrom('1.250,5') !== 1250.5) throw new Error('Conversão numérica pt-BR inválida');
+
+        const base = { projectName:'Teste', material:'Aço', profile:{type:'rectTube',label:'Tubo retangular',dimensions:{width:80,height:40,thickness:3}}, stockLength:6000 };
+        const noKerf = core.optimizeCuttingList({ ...base, kerf:0, cuts:[{id:'A',length:3000,quantity:2,colorIndex:0}] });
+        if (noKerf.bins.length !== 1 || noKerf.totalWaste !== 0) throw new Error('Plano sem kerf incorreto');
+        const withKerf = core.optimizeCuttingList({ ...base, kerf:3, cuts:[{id:'A',length:3000,quantity:2,colorIndex:0}] });
+        if (withKerf.bins.length !== 2 || withKerf.totalKerfLoss !== 6 || withKerf.totalWaste !== 5994 || withKerf.utilization !== 50) throw new Error('Espessura de corte não foi respeitada');
+        const exactFit = core.optimizeCuttingList({ ...base, kerf:3, cuts:[{id:'A',length:3000,quantity:1,colorIndex:0},{id:'B',length:2997,quantity:1,colorIndex:1}] });
+        if (exactFit.bins.length !== 1 || Math.abs(exactFit.bins[0].used - 6000) > 1e-7 || !exactFit.optimal) throw new Error('Encaixe exato ou prova de ótimo incorreta');
+        if (core.groupedPatterns(withKerf)[0].bins.length !== 2) throw new Error('Agrupamento de padrões iguais incorreto');
+        const mixed = core.optimizeCuttingList({ ...base, name:'Estoque misto', kerf:3, stockTypes:[
+          {id:'retalho-2003',kind:'scrap',length:2003,quantity:1},
+          {id:'retalho-1000',kind:'scrap',length:1000,quantity:1},
+          {id:'comercial-6000',kind:'commercial',length:6000,quantity:null}
+        ], cuts:[{id:'M',length:1000,quantity:3,colorIndex:0}] });
+        if (mixed.bins.length !== 2 || mixed.totalStockLength !== 3003 || mixed.totalWaste !== 0 || mixed.bins.some(bin => bin.stockType.kind !== 'scrap')) throw new Error('Seleção de retalhos/blanks mistos incorreta');
+        let shortageDetected = false;
+        try { core.optimizeCuttingList({ ...base, name:'Estoque finito', kerf:0, stockTypes:[{id:'unico',kind:'scrap',length:1000,quantity:1}], cuts:[{id:'F',length:1000,quantity:2,colorIndex:0}] }); }
+        catch (error) { shortageDetected = /insuficiente/.test(error.message); }
+        if (!shortageDetected) throw new Error('Limite de quantidade dos blanks não foi respeitado');
+        const project = core.optimizeProject({ projectName:'Projeto completo', profiles:[
+          { ...base, id:'perfil-a', name:'Perfil A', kerf:0, stockTypes:[{id:'a-6000',kind:'commercial',length:6000,quantity:null}], cuts:[{id:'A',length:1000,quantity:2,colorIndex:0}] },
+          { ...base, id:'perfil-b', name:'Perfil B', kerf:0, stockTypes:[{id:'b-3000',kind:'commercial',length:3000,quantity:null}], cuts:[{id:'B',length:500,quantity:2,colorIndex:0}] }
+        ] });
+        if (project.profileResults.length !== 2 || project.totalPieces !== 4 || project.totalBars !== 2) throw new Error('Perfis diferentes foram misturados ou não agregados corretamente');
+        log.push('Otimizador 1D: OK', 'Kerf: OK', 'Estoque misto e finito: OK', 'Projeto multi-perfil: OK', 'Agrupamento de padrões: OK');
+
+        const cutsBody = doc.getElementById('cutsBody');
+        if (cutsBody.rows.length !== 1) throw new Error('Lista inicial de medidas inválida');
+        const profileSelect = doc.getElementById('profileSelect');
+        if (profileSelect.options.length !== 1 || doc.getElementById('stockBody').children.length !== 1) throw new Error('Cadastro inicial do perfil inválido');
+        doc.getElementById('profileName').value = 'Longarinas';
+        doc.getElementById('profileName').dispatchEvent(new Event('input'));
+        doc.getElementById('addProfileButton').click();
+        if (profileSelect.options.length !== 2 || doc.getElementById('profileName').value !== 'Perfil 2') throw new Error('Botão adicionar perfil falhou');
+        profileSelect.value = profileSelect.options[0].value;
+        profileSelect.dispatchEvent(new Event('change'));
+        if (doc.getElementById('profileName').value !== 'Longarinas') throw new Error('Dados não foram preservados ao trocar de perfil');
+        const stockBody = doc.getElementById('stockBody');
+        doc.getElementById('addStockButton').click();
+        if (stockBody.children.length !== 2 || stockBody.lastElementChild.querySelector('.stock-kind').value !== 'scrap') throw new Error('Botão adicionar blank/retalho falhou');
+        stockBody.lastElementChild.querySelector('.remove-stock').click();
+        if (stockBody.children.length !== 1) throw new Error('Remoção de blank/retalho falhou');
+        doc.getElementById('addCutButton').click();
+        if (cutsBody.rows.length !== 2) throw new Error('Botão adicionar medida falhou');
+        cutsBody.querySelector('tr:last-child .remove-cut').click();
+        doc.getElementById('sectionType').value = 'roundTube';
+        doc.getElementById('sectionType').dispatchEvent(new Event('change'));
+        if (doc.querySelectorAll('#dimensionFields input').length !== 2) throw new Error('Campos dinâmicos da seção falharam');
+
+        const row = cutsBody.rows[0];
+        row.querySelector('.cut-id').value = 'T01'; row.querySelector('.cut-length').value = '1000'; row.querySelector('.cut-quantity').value = '6';
+        doc.getElementById('optimizeButton').click();
+        for (let retry = 0; retry < 40 && doc.getElementById('resultContent').hidden; retry++) await wait(50);
+        if (doc.getElementById('resultContent').hidden || doc.getElementById('metricBars').textContent !== '2') throw new Error('Fluxo da interface não gerou o plano esperado');
+
+        const workbook = win.XLSX.utils.book_new();
+        win.XLSX.utils.book_append_sheet(workbook, win.XLSX.utils.aoa_to_sheet([['Identificacao','Comprimento_mm','Quantidade'],['IMP-01',1500,2]]), 'Cortes');
+        const bytes = win.XLSX.write(workbook, { bookType:'xlsx', type:'array' });
+        const transfer = new win.DataTransfer();
+        transfer.items.add(new win.File([bytes], 'teste.xlsx', { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+        const input = doc.getElementById('excelInput');
+        Object.defineProperty(input, 'files', { configurable:true, value:transfer.files });
+        input.dispatchEvent(new win.Event('change'));
+        for (let retry = 0; retry < 40 && cutsBody.querySelector('.cut-id').value !== 'IMP-01'; retry++) await wait(50);
+        if (cutsBody.rows.length !== 1 || cutsBody.querySelector('.cut-length').value !== '1500' || cutsBody.querySelector('.cut-quantity').value !== '2') throw new Error('Importação XLSX inválida');
+
+        const fullWorkbook = win.XLSX.utils.book_new();
+        win.XLSX.utils.book_append_sheet(fullWorkbook, win.XLSX.utils.aoa_to_sheet([
+          ['Perfil','Material','Tipo_secao','Dimensao_A_mm','Dimensao_B_mm','Espessura_mm','Kerf_mm','Tipo_blank','Comprimento_blank_mm','Quantidade_blank'],
+          ['Tubos Ø60','Aço carbono','Tubo redondo',60,'',3,3,'Comercial',6000,''],
+          ['Tubos Ø60','Aço carbono','Tubo redondo',60,'',3,3,'Retalho',1800,2],
+          ['Travessas 80x40','Aço carbono','Tubo retangular',80,40,3,2,'Comercial',12000,4]
+        ]), 'Perfis');
+        win.XLSX.utils.book_append_sheet(fullWorkbook, win.XLSX.utils.aoa_to_sheet([
+          ['Perfil','Identificacao','Comprimento_mm','Quantidade'],
+          ['Tubos Ø60','TP-01',1200,3],
+          ['Travessas 80x40','TR-01',850,5]
+        ]), 'Cortes');
+        const fullBytes = win.XLSX.write(fullWorkbook, { bookType:'xlsx', type:'array' });
+        const fullTransfer = new win.DataTransfer();
+        fullTransfer.items.add(new win.File([fullBytes], 'projeto-completo.xlsx', { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+        Object.defineProperty(input, 'files', { configurable:true, value:fullTransfer.files });
+        input.dispatchEvent(new win.Event('change'));
+        for (let retry = 0; retry < 40 && (profileSelect.options[0]?.textContent !== 'Tubos Ø60' || cutsBody.querySelector('.cut-id')?.value !== 'TP-01'); retry++) await wait(50);
+        if (profileSelect.options.length !== 2 || stockBody.children.length !== 2 || cutsBody.querySelector('.cut-id').value !== 'TP-01') throw new Error('Importação do projeto completo inválida');
+        profileSelect.value = profileSelect.options[1].value;
+        profileSelect.dispatchEvent(new Event('change'));
+        if (doc.getElementById('sectionType').value !== 'rectTube' || cutsBody.querySelector('.cut-id').value !== 'TR-01' || stockBody.querySelector('.stock-length').value !== '12000') throw new Error('Relacionamento entre perfis, blanks e cortes importados inválido');
+        log.push('Interface multi-perfil: OK', 'Importação XLSX simples: OK', 'Importação de projeto completo: OK', 'Biblioteca local: OK');
+        document.getElementById('status').textContent = 'PASS';
+      } catch (error) {
+        document.getElementById('status').textContent = 'FAIL';
+        log.push(error.stack || error.message);
+      }
+      document.getElementById('details').textContent = log.join('\n');
+    });
+  </script>
+</body>
+</html>

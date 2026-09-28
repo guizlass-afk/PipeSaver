@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="PipeSaver — otimizador online de listas de corte para tubos, barras e perfis.">
+  <title>PipeSaver — Lista de corte de tubos</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="PipeSaver">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span class="brand-name"><strong>Pipe</strong><b>Saver</b></span>
+    </a>
+    <div class="top-status"><span></span>Processamento local e seguro</div>
+  </header>
+
+  <main class="app-shell">
+    <aside class="sidebar">
+      <section class="panel">
+        <div class="section-heading"><span>1</span><div><h2>Perfis do projeto</h2><p>Adicione todas as seções deste estudo</p></div></div>
+        <label class="field full"><span>Nome do projeto</span><input id="projectName" value="Nova lista de corte" maxlength="80"></label>
+        <div class="profile-switcher">
+          <label class="field"><span>Perfil em edição</span><select id="profileSelect"></select></label>
+          <button id="addProfileButton" type="button" title="Adicionar perfil" aria-label="Adicionar perfil">+</button>
+          <button id="removeProfileButton" type="button" title="Remover perfil" aria-label="Remover perfil">×</button>
+        </div>
+        <label class="field full profile-name-field"><span>Identificação do perfil</span><input id="profileName" value="Perfil 1" maxlength="60" placeholder="Ex.: Tubo principal Ø60 × 3"></label>
+        <div class="field-grid two">
+          <label class="field"><span>Material</span><input id="material" value="Aço carbono" maxlength="50"></label>
+          <label class="field"><span>Tipo de seção</span>
+            <select id="sectionType">
+              <option value="roundTube">Tubo redondo</option>
+              <option value="squareTube">Tubo quadrado</option>
+              <option value="rectTube" selected>Tubo retangular</option>
+              <option value="roundBar">Barra redonda</option>
+              <option value="flatBar">Barra chata</option>
+              <option value="angle">Cantoneira</option>
+              <option value="custom">Outro perfil</option>
+            </select>
+          </label>
+        </div>
+        <div id="dimensionFields" class="field-grid three dimensions"></div>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading"><span>2</span><div><h2>Barra e ferramenta</h2><p>Valores em milímetros</p></div></div>
+        <div class="stock-heading"><strong>Blanks disponíveis</strong><small>Qtd. vazia = ilimitada</small></div>
+        <div class="stock-columns"><span>Tipo</span><span>Comprimento</span><span>Qtd.</span><span></span></div>
+        <div id="stockBody" class="stock-list"></div>
+        <button id="addStockButton" class="add-row-button stock-add-button" type="button"><span>+</span> Adicionar blank ou retalho</button>
+        <div class="tool-field">
+          <label class="field"><span>Espessura de corte</span><input id="kerf" type="number" value="3" min="0" step="0.1"></label>
+        </div>
+        <p class="field-help"><strong>Blank</strong> é qualquer barra bruta ou retalho disponível. A espessura de corte considera os cortes entre peças e o corte final que separa a sobra.</p>
+      </section>
+
+      <section class="panel cuts-panel">
+        <div class="section-heading"><span>3</span><div><h2>Peças desejadas</h2><p>Digite ou importe de uma planilha</p></div></div>
+        <div class="import-actions">
+          <button id="templateButton" class="ghost-button" type="button"><span aria-hidden="true">⇩</span> Baixar modelo</button>
+          <label class="ghost-button import-button"><span aria-hidden="true">⇧</span> Importar Excel<input id="excelInput" type="file" accept=".xlsx,.xls,.csv" hidden></label>
+        </div>
+        <div class="cuts-table-wrap">
+          <table class="cuts-table">
+            <thead><tr><th>Identificação</th><th>Comprimento</th><th>Qtd.</th><th></th></tr></thead>
+            <tbody id="cutsBody"></tbody>
+          </table>
+        </div>
+        <button id="addCutButton" class="add-row-button" type="button"><span>+</span> Adicionar medida</button>
+      </section>
+
+      <button id="optimizeButton" class="primary-button" type="button"><span>Gerar plano de corte</span><span>→</span></button>
+      <div id="message" class="message" role="status" aria-live="polite"></div>
+    </aside>
+
+    <section class="workspace">
+      <div class="workspace-toolbar">
+        <div><h1>Plano de corte</h1><p id="resultSubtitle">Configure o material e adicione as peças</p></div>
+        <div class="toolbar-actions">
+          <button id="printButton" class="secondary-button" disabled>Imprimir</button>
+          <button id="exportButton" class="export-button" disabled>Exportar Excel</button>
+        </div>
+      </div>
+
+      <section class="result-area">
+        <div id="resultContent" hidden>
+          <div class="metrics">
+            <article><span class="metric-icon bars">▤</span><div><small>Barras necessárias</small><strong id="metricBars">—</strong></div></article>
+            <article><span class="metric-icon usage">◔</span><div><small>Aproveitamento</small><strong id="metricUsage">—</strong></div></article>
+            <article><span class="metric-icon pieces">◇</span><div><small>Peças</small><strong id="metricPieces">—</strong></div></article>
+            <article><span class="metric-icon waste">↘</span><div><small>Sobra total</small><strong id="metricWaste">—</strong></div></article>
+          </div>
+
+          <div class="result-card visual-card">
+            <div class="card-heading"><div><h2>Mapa das barras</h2><p>Cada cor representa uma medida da lista</p></div><span id="profileBadge" class="profile-badge"></span></div>
+            <div id="barsVisual" class="bars-visual"></div>
+          </div>
+
+          <div class="result-card">
+            <div class="card-heading"><div><h2>Lista de corte</h2><p>Padrões iguais são agrupados para facilitar a produção</p></div></div>
+            <div class="result-table-wrap">
+              <table class="result-table">
+                <thead><tr><th>Perfil</th><th>Padrão</th><th>Blank utilizado</th><th>Qtd.</th><th>Sequência de cortes</th><th>Usado</th><th>Sobra/barra</th><th>Aproveitamento</th></tr></thead>
+                <tbody id="patternsBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <footer><span>PipeSaver v1.0</span><span>Otimização 1D · Seus dados não saem deste dispositivo</span><a href="THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener">Licenças</a></footer>
+  <script src="vendor/xlsx.full.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
