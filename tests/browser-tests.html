@@ -32,6 +32,16 @@
           {id:'comercial-6000',kind:'commercial',length:6000,quantity:null}
         ], cuts:[{id:'M',length:1000,quantity:3,colorIndex:0}] });
         if (mixed.bins.length !== 2 || mixed.totalStockLength !== 3003 || mixed.totalWaste !== 0 || mixed.bins.some(bin => bin.stockType.kind !== 'scrap')) throw new Error('Seleção de barras mistas incorreta');
+        const regularStock = core.optimizeCuttingList({ ...base, name:'Sem prioridade', kerf:3, stockTypes:[
+          {id:'barra-4000',length:4000,quantity:1,priority:false},
+          {id:'barra-6000',length:6000,quantity:2,priority:false}
+        ], cuts:[{id:'R',length:1250,quantity:8,colorIndex:0}] });
+        const priorityStock = core.optimizeCuttingList({ ...base, name:'Com prioridade', kerf:3, stockTypes:[
+          {id:'barra-4000',length:4000,quantity:1,priority:true},
+          {id:'barra-6000',length:6000,quantity:2,priority:false}
+        ], cuts:[{id:'R',length:1250,quantity:8,colorIndex:0}] });
+        if (regularStock.bins.length !== 2 || regularStock.bins.some(bin => bin.stockLength !== 6000)) throw new Error('Otimização normal de barras incorreta');
+        if (priorityStock.bins.length !== 3 || priorityStock.bins.filter(bin => bin.stockType.priority && bin.stockLength === 4000).length !== 1) throw new Error('Barra prioritária não foi consumida primeiro');
         let shortageDetected = false;
         try { core.optimizeCuttingList({ ...base, name:'Estoque finito', kerf:0, stockTypes:[{id:'unico',kind:'scrap',length:1000,quantity:1}], cuts:[{id:'F',length:1000,quantity:2,colorIndex:0}] }); }
         catch (error) { shortageDetected = /insuficiente/.test(error.message); }
@@ -41,7 +51,7 @@
           { ...base, id:'perfil-b', name:'Perfil B', kerf:0, stockTypes:[{id:'b-3000',kind:'commercial',length:3000,quantity:null}], cuts:[{id:'B',length:500,quantity:2,colorIndex:0}] }
         ] });
         if (project.profileResults.length !== 2 || project.totalPieces !== 4 || project.totalBars !== 2) throw new Error('Perfis diferentes foram misturados ou não agregados corretamente');
-        log.push('Otimizador 1D: OK', 'Kerf: OK', 'Estoque misto e finito: OK', 'Projeto multi-perfil: OK', 'Agrupamento de padrões: OK');
+        log.push('Otimizador 1D: OK', 'Kerf: OK', 'Estoque misto e finito: OK', 'Prioridade de barras: OK', 'Projeto multi-perfil: OK', 'Agrupamento de padrões: OK');
 
         const cutsBody = doc.getElementById('cutsBody');
         if (cutsBody.children.length !== 1) throw new Error('Lista inicial de medidas inválida');
@@ -67,7 +77,7 @@
         if (stockBody.children.length !== 2) throw new Error('Remoção de barra falhou');
         const stockRows = [...stockBody.querySelectorAll('.stock-row')];
         stockRows[0].querySelector('.stock-length').value = '6000'; stockRows[0].querySelector('.stock-quantity').value = '2';
-        stockRows[1].querySelector('.stock-length').value = '4000'; stockRows[1].querySelector('.stock-quantity').value = '1';
+        stockRows[1].querySelector('.stock-length').value = '4000'; stockRows[1].querySelector('.stock-quantity').value = '1'; stockRows[1].querySelector('.stock-priority').checked = true;
         doc.getElementById('addCutButton').click();
         if (cutsBody.children.length !== 2 || cutsBody.lastElementChild.querySelector('.cut-profile').value !== firstProfileId) throw new Error('Botão adicionar medida falhou');
         cutsBody.querySelector('.cut-row:last-child .remove-cut').click();
@@ -101,10 +111,10 @@
           ['Travessas 80x40','Aço carbono','Tubo retangular',80,40,3]
         ]), 'Perfis');
         win.XLSX.utils.book_append_sheet(fullWorkbook, win.XLSX.utils.aoa_to_sheet([
-          ['Perfil','Comprimento_barra_mm','Quantidade'],
-          ['Tubos Ø60',6000,2],
-          ['Tubos Ø60',1800,1],
-          ['Travessas 80x40',12000,4]
+          ['Perfil','Comprimento_barra_mm','Quantidade','Priorizar'],
+          ['Tubos Ø60',6000,2,'Não'],
+          ['Tubos Ø60',1800,1,'Sim'],
+          ['Travessas 80x40',12000,4,'Não']
         ]), 'Barras');
         win.XLSX.utils.book_append_sheet(fullWorkbook, win.XLSX.utils.aoa_to_sheet([
           ['Perfil','Identificacao','Comprimento_mm','Quantidade'],
@@ -122,7 +132,7 @@
         Object.defineProperty(input, 'files', { configurable:true, value:fullTransfer.files });
         input.dispatchEvent(new win.Event('change'));
         for (let retry = 0; retry < 40 && (profileItems()[0]?.querySelector('strong').textContent !== 'Tubos Ø60' || cutsBody.querySelector('.cut-id')?.value !== 'TP-01'); retry++) await wait(50);
-        if (profileItems().length !== 2 || stockBody.children.length !== 3 || cutsBody.children.length !== 2 || cutsBody.querySelector('.cut-id').value !== 'TP-01' || doc.getElementById('kerf').value !== '2') throw new Error('Importação do projeto completo inválida');
+        if (profileItems().length !== 2 || stockBody.children.length !== 3 || cutsBody.children.length !== 2 || cutsBody.querySelector('.cut-id').value !== 'TP-01' || doc.getElementById('kerf').value !== '2' || !stockBody.children[1].querySelector('.stock-priority').checked) throw new Error('Importação do projeto completo inválida');
         profileItems()[1].querySelector('.profile-list-select').click();
         const secondProfileId = profileItems()[1].dataset.profileId, secondCut = [...cutsBody.children].find(item => item.querySelector('.cut-profile').value === secondProfileId), secondStock = [...stockBody.children].find(item => item.querySelector('.stock-profile').value === secondProfileId);
         if (doc.getElementById('sectionType').value !== 'rectTube' || secondCut?.querySelector('.cut-id').value !== 'TR-01' || secondStock?.querySelector('.stock-length').value !== '12000') throw new Error('Relacionamento entre perfis, barras e cortes importados inválido');

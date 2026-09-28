@@ -9,6 +9,7 @@ Aplicação publicada: [guizlass-afk.github.io/PipeSaver](https://guizlass-afk.g
 - vários perfis/seções no mesmo estudo, cada um com material, geometria e dimensões próprios;
 - lista de barras disponíveis relacionada aos perfis cadastrados;
 - vários comprimentos e quantidades de barra para o mesmo perfil;
+- opção de priorizar barras específicas, ideal para consumir retalhos antes das barras de prateleira;
 - espessura de corte (*kerf*) configurável para o estudo;
 - lista de peças em que cada medida seleciona o perfil correspondente;
 - modelo Excel de projeto completo para download e importação de `.xlsx`, `.xls` e `.csv`;
@@ -20,7 +21,7 @@ Aplicação publicada: [guizlass-afk.github.io/PipeSaver](https://guizlass-afk.g
 
 1. Abra `index.html` em um navegador moderno.
 2. Em **Perfis do projeto**, cadastre cada seção uma única vez. Os nomes `Perfil 1`, `Perfil 2` etc. podem ser editados.
-3. Em **Barras disponíveis**, escolha o perfil de cada linha e informe o comprimento e a quantidade existente.
+3. Em **Barras disponíveis**, escolha o perfil de cada linha e informe o comprimento e a quantidade existente. Marque **Priorizar** quando aquela barra deve ser consumida antes das demais.
 4. Informe a espessura consumida pela ferramenta de corte.
 5. Em **Peças desejadas**, selecione o perfil de cada medida e informe identificação, comprimento final e quantidade.
 6. Se preferir, clique em **Baixar modelo**, preencha as abas `Perfis`, `Barras`, `Cortes` e `Configuracoes` e importe o projeto inteiro.
@@ -44,6 +45,7 @@ Na aba `Barras`:
 | `Perfil` | Nome exato do perfil cadastrado na aba `Perfis` |
 | `Comprimento_barra_mm` | Comprimento bruto disponível |
 | `Quantidade` | Quantidade existente desse comprimento |
+| `Priorizar` | `Sim` para consumir essas barras antes das demais; `Não` para otimização normal |
 
 Na aba `Cortes`:
 
@@ -70,11 +72,12 @@ O aproveitamento considera somente o comprimento útil das peças. A perda da fe
 Cada seção é tratada de forma independente como um problema de *one-dimensional cutting stock/bin packing*. O programa:
 
 1. transforma comprimentos e espessura de corte em uma capacidade equivalente;
-2. compara as barras de comprimentos e disponibilidades diferentes;
-3. executa *best-fit decreasing*, estratégias de escolha de estoque e centenas de ordenações determinísticas;
-4. minimiza primeiro o comprimento bruto total consumido e depois a quantidade de barras;
-5. em soluções equivalentes, concentra a sobra para produzir retalhos maiores e mais reaproveitáveis;
-6. para listas menores com um único comprimento de barra, realiza uma busca exata com poda e limite de tempo.
+2. consome primeiro as barras marcadas como prioritárias sempre que houver peças compatíveis;
+3. compara as barras de comprimentos e disponibilidades diferentes;
+4. executa *best-fit decreasing*, estratégias de escolha de estoque e centenas de ordenações determinísticas;
+5. depois de atender às prioridades, minimiza o comprimento bruto total consumido e a quantidade de barras;
+6. em soluções equivalentes, concentra a sobra para produzir retalhos maiores e mais reaproveitáveis;
+7. para listas menores com um único comprimento de barra, realiza uma busca exata com poda e limite de tempo.
 
 O algoritmo é heurístico em listas grandes e em estoques mistos. Quando um perfil possui um único tamanho de barra e a solução alcança o limite inferior calculado pela capacidade total, a interface informa que o mínimo matemático foi atingido.
 

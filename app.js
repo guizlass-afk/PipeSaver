@@ -34,6 +34,7 @@
     else if (text.includes(',')) text = text.replace(',', '.');
     return Number.parseFloat(text);
   }
+  function booleanFrom(value) { return ['1', 'true', 'sim', 'yes', 'x', 'priorizar', 'prioritario', 'prioritaria'].includes(normalizeHeader(value)); }
   function normalizeHeader(value) { return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }
   function safeFileName(value) { return String(value || 'pipesaver').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60) || 'pipesaver'; }
   function escapeHtml(value) { const div = document.createElement('div'); div.textContent = value; return div.innerHTML; }
@@ -93,7 +94,7 @@
   function addStockRow(values = {}, focus = false) {
     const row = document.createElement('div'); row.className = 'stock-row'; row.dataset.stockId = values.id || `stock-${state.nextStockId++}`;
     const profileId = values.profileId || state.activeProfileId || state.profiles[0]?.id;
-    row.innerHTML = `<select class="stock-profile" aria-label="Perfil da barra">${profileOptionsMarkup(profileId)}</select><input class="stock-length" type="number" value="${values.length ?? 6000}" min="1" step="0.1" aria-label="Comprimento da barra"><input class="stock-quantity" type="number" value="${values.quantity ?? 1}" min="1" max="9999" step="1" aria-label="Quantidade disponível"><button class="remove-stock" type="button" title="Remover barra" aria-label="Remover barra">×</button>`;
+    row.innerHTML = `<select class="stock-profile" aria-label="Perfil da barra">${profileOptionsMarkup(profileId)}</select><input class="stock-length" type="number" value="${values.length ?? 6000}" min="1" step="0.1" aria-label="Comprimento da barra"><input class="stock-quantity" type="number" value="${values.quantity ?? 1}" min="1" max="9999" step="1" aria-label="Quantidade disponível"><label class="stock-priority-label" title="Consumir estas barras antes das demais"><input class="stock-priority" type="checkbox"${values.priority ? ' checked' : ''} aria-label="Priorizar esta barra"></label><button class="remove-stock" type="button" title="Remover barra" aria-label="Remover barra">×</button>`;
     row.querySelectorAll('input,select').forEach(element => element.addEventListener('change', invalidateResult));
     row.querySelector('.remove-stock').addEventListener('click', () => { if (ui.stockBody.children.length <= 1) return; row.remove(); updateStockRemoveButtons(); syncRelationRows(); invalidateResult(); });
     ui.stockBody.appendChild(row); updateStockRemoveButtons(); if (focus) row.querySelector('.stock-length').focus(); return row;
@@ -111,12 +112,12 @@
     ui.cutsBody.appendChild(row); updateCutRemoveButtons(); if (focus) row.querySelector('.cut-id').focus(); return row;
   }
   function syncRelationRows() {
-    state.stocks = [...ui.stockBody.querySelectorAll('.stock-row')].map(row => ({ id: row.dataset.stockId, profileId: row.querySelector('.stock-profile').value, length: row.querySelector('.stock-length').value, quantity: row.querySelector('.stock-quantity').value }));
+    state.stocks = [...ui.stockBody.querySelectorAll('.stock-row')].map(row => ({ id: row.dataset.stockId, profileId: row.querySelector('.stock-profile').value, length: row.querySelector('.stock-length').value, quantity: row.querySelector('.stock-quantity').value, priority: row.querySelector('.stock-priority').checked }));
     state.cuts = [...ui.cutsBody.querySelectorAll('.cut-row')].map(row => ({ rowId: row.dataset.rowId, profileId: row.querySelector('.cut-profile').value, id: row.querySelector('.cut-id').value, length: row.querySelector('.cut-length').value, quantity: row.querySelector('.cut-quantity').value }));
   }
   function renderRelationRows() {
     ui.stockBody.innerHTML = '';
-    (state.stocks.length ? state.stocks : [{ profileId: state.profiles[0]?.id, length: 6000, quantity: 1 }]).forEach(stock => addStockRow(stock));
+    (state.stocks.length ? state.stocks : [{ profileId: state.profiles[0]?.id, length: 6000, quantity: 1, priority: false }]).forEach(stock => addStockRow(stock));
     ui.cutsBody.innerHTML = '';
     (state.cuts.length ? state.cuts : [{ profileId: state.profiles[0]?.id, id: '', length: '', quantity: 1 }]).forEach(cut => addCutRow(cut));
     syncRelationRows();
@@ -184,7 +185,7 @@
         const length = numberFrom(stock.length), quantity = Math.trunc(numberFrom(stock.quantity));
         if (!(length > 0)) throw new Error(`Comprimento de barra inválido no perfil “${profile.name}”.`);
         if (!(quantity >= 1 && quantity <= 9999)) throw new Error(`Quantidade de barras inválida no perfil “${profile.name}”.`);
-        return { id: stock.id || `stock-${profileIndex}-${stockIndex}`, kind: 'commercial', label: 'Barra disponível', length, quantity };
+        return { id: stock.id || `stock-${profileIndex}-${stockIndex}`, kind: 'commercial', label: stock.priority ? 'Barra prioritária' : 'Barra disponível', length, quantity, priority: Boolean(stock.priority) };
       });
       if (!stocks.length) throw new Error(`Adicione pelo menos uma barra ao perfil “${profile.name}”.`);
       const largest = Math.max(...stocks.map(stock => stock.length));
@@ -215,18 +216,23 @@
     const bins = [], usage = new Map(config.stockTypes.map(type => [type.id, 0]));
     for (let itemIndex = 0; itemIndex < order.length; itemIndex++) {
       const item = order[itemIndex]; let selected = null, bestRemainder = Infinity;
-      bins.forEach(bin => { const remainder = bin.capacity - bin.effectiveUsed - item.effective; if (remainder >= -1e-7 && remainder < bestRemainder) { selected = bin; bestRemainder = remainder; } });
-      if (selected) { selected.items.push(item); selected.effectiveUsed += item.effective; continue; }
       const available = config.stockTypes.filter(type => (type.quantity === null || (usage.get(type.id) || 0) < type.quantity) && item.length <= type.length + 1e-7);
+      bins.filter(bin => bin.stockType.priority).forEach(bin => { const remainder = bin.capacity - bin.effectiveUsed - item.effective; if (remainder >= -1e-7 && remainder < bestRemainder) { selected = bin; bestRemainder = remainder; } });
+      if (selected) { selected.items.push(item); selected.effectiveUsed += item.effective; continue; }
+      const priorityAvailable = available.filter(type => type.priority);
+      if (!priorityAvailable.length) {
+        bins.forEach(bin => { const remainder = bin.capacity - bin.effectiveUsed - item.effective; if (remainder >= -1e-7 && remainder < bestRemainder) { selected = bin; bestRemainder = remainder; } });
+        if (selected) { selected.items.push(item); selected.effectiveUsed += item.effective; continue; }
+      }
       if (!available.length) return null;
       const future = order.slice(itemIndex + 1);
-      const ranked = available.map(type => {
+      const ranked = (priorityAvailable.length ? priorityAvailable : available).map(type => {
         const projected = projectedRemainder(type, item, future, config.kerf);
         let score;
         if (strategy === 0) score = type.length;
         else if (strategy === 1) score = projected + type.length * 1e-5;
         else if (strategy === 2) score = -type.length;
-        else if (strategy === 3) score = (type.kind === 'scrap' && type.quantity !== null ? -1e9 : 0) + projected;
+        else if (strategy === 3) score = (type.priority ? -1e9 : 0) + projected;
         else score = projected * (.75 + random() * .5) + type.length * random() * .08;
         return { type, score };
       }).sort((a, b) => a.score - b.score);
@@ -238,12 +244,13 @@
   function candidateSummary(bins, config) {
     const totalStockLength = bins.reduce((sum, bin) => sum + bin.stockLength, 0);
     const concentratedWaste = bins.reduce((sum, bin) => { const waste = binMeasurements(bin.items, bin.stockLength, config.kerf).waste; return sum + waste * waste; }, 0);
-    return { totalStockLength, barCount: bins.length, concentratedWaste };
+    const priorityBars = bins.reduce((sum, bin) => sum + (bin.stockType.priority ? 1 : 0), 0);
+    return { totalStockLength, barCount: bins.length, concentratedWaste, priorityBars };
   }
   function betterCandidate(candidate, best, config) {
     if (!best) return true;
     const a = candidateSummary(candidate, config), b = candidateSummary(best, config);
-    return a.totalStockLength < b.totalStockLength - 1e-7 || (Math.abs(a.totalStockLength - b.totalStockLength) <= 1e-7 && (a.barCount < b.barCount || (a.barCount === b.barCount && a.concentratedWaste > b.concentratedWaste + 1e-7)));
+    return a.priorityBars > b.priorityBars || (a.priorityBars === b.priorityBars && (a.totalStockLength < b.totalStockLength - 1e-7 || (Math.abs(a.totalStockLength - b.totalStockLength) <= 1e-7 && (a.barCount < b.barCount || (a.barCount === b.barCount && a.concentratedWaste > b.concentratedWaste + 1e-7)))));
   }
   function exactImprove(items, capacity, initialBins, timeBudgetMs = 700) {
     if (items.length > 44) return { bins: initialBins, completed: false };
@@ -268,7 +275,7 @@
     search(0); return { bins: best, completed: !timedOut || best.length === lowerBound };
   }
   function optimizeCuttingList(inputConfig) {
-    const stockTypes = Array.isArray(inputConfig.stockTypes) && inputConfig.stockTypes.length ? inputConfig.stockTypes.map((type, index) => ({ id: String(type.id ?? `stock-${index + 1}`), kind: type.kind === 'scrap' ? 'scrap' : 'commercial', label: type.label || (type.kind === 'scrap' ? 'Retalho' : 'Barra comercial'), length: Number(type.length), quantity: type.quantity === null || type.quantity === '' || type.quantity === undefined ? null : Math.max(1, Math.trunc(Number(type.quantity))) })) : [{ id: 'stock-1', kind: 'commercial', label: 'Barra comercial', length: Number(inputConfig.stockLength), quantity: null }];
+    const stockTypes = Array.isArray(inputConfig.stockTypes) && inputConfig.stockTypes.length ? inputConfig.stockTypes.map((type, index) => ({ id: String(type.id ?? `stock-${index + 1}`), kind: type.kind === 'scrap' ? 'scrap' : 'commercial', label: type.label || (type.priority ? 'Barra prioritária' : 'Barra disponível'), length: Number(type.length), quantity: type.quantity === null || type.quantity === '' || type.quantity === undefined ? null : Math.max(1, Math.trunc(Number(type.quantity))), priority: Boolean(type.priority) })) : [{ id: 'stock-1', kind: 'commercial', label: 'Barra disponível', length: Number(inputConfig.stockLength), quantity: null, priority: false }];
     const config = { ...inputConfig, stockTypes };
     const items = []; config.cuts.forEach((cut, cutIndex) => { for (let count = 1; count <= cut.quantity; count++) items.push({ ...cut, cutIndex, instance: count, effective: cut.length + config.kerf }); });
     if (!items.length) throw new Error('Nenhuma peça informada.');
@@ -343,10 +350,10 @@
       ['Perfil 2', 'Aço carbono', 'Tubo retangular', 80, 40, 3]
     ]);
     const stocks = XLSX.utils.aoa_to_sheet([
-      ['Perfil', 'Comprimento_barra_mm', 'Quantidade'],
-      ['Perfil 1', 6000, 2],
-      ['Perfil 1', 4000, 1],
-      ['Perfil 2', 6000, 4]
+      ['Perfil', 'Comprimento_barra_mm', 'Quantidade', 'Priorizar'],
+      ['Perfil 1', 6000, 2, 'Não'],
+      ['Perfil 1', 4000, 1, 'Sim'],
+      ['Perfil 2', 6000, 4, 'Não']
     ]);
     const cuts = XLSX.utils.aoa_to_sheet([
       ['Perfil', 'Identificacao', 'Comprimento_mm', 'Quantidade', 'Observacao'],
@@ -362,11 +369,12 @@
       ['MODELO PIPESAVER — PROJETO COMPLETO'],
       ['1. Cadastre uma única vez cada seção na aba Perfis. O nome do perfil pode ser editado.'],
       ['2. Na aba Barras, informe todos os comprimentos e quantidades disponíveis para cada perfil.'],
+      ['Marque Sim na coluna Priorizar quando quiser consumir aquela barra antes das demais.'],
       ['3. Na aba Cortes, relacione cada medida ao nome exato do perfil correspondente.'],
       ['4. Ajuste o nome do projeto e a espessura da ferramenta na aba Configuracoes.'],
       ['Tipos aceitos', 'Tubo redondo, Tubo quadrado, Tubo retangular, Barra redonda, Barra chata, Cantoneira e Outro perfil.']
     ]);
-    profiles['!cols'] = [{wch:20},{wch:18},{wch:20},{wch:17},{wch:17},{wch:17}]; stocks['!cols'] = [{wch:20},{wch:24},{wch:14}]; cuts['!cols'] = [{wch:20},{wch:20},{wch:20},{wch:14},{wch:38}]; settings['!cols'] = [{wch:24},{wch:24}]; instructions['!cols'] = [{wch:34},{wch:100}];
+    profiles['!cols'] = [{wch:20},{wch:18},{wch:20},{wch:17},{wch:17},{wch:17}]; stocks['!cols'] = [{wch:20},{wch:24},{wch:14},{wch:14}]; cuts['!cols'] = [{wch:20},{wch:20},{wch:20},{wch:14},{wch:38}]; settings['!cols'] = [{wch:24},{wch:24}]; instructions['!cols'] = [{wch:34},{wch:100}];
     const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, profiles, 'Perfis'); XLSX.utils.book_append_sheet(workbook, stocks, 'Barras'); XLSX.utils.book_append_sheet(workbook, cuts, 'Cortes'); XLSX.utils.book_append_sheet(workbook, settings, 'Configuracoes'); XLSX.utils.book_append_sheet(workbook, instructions, 'Instrucoes'); XLSX.writeFile(workbook, 'modelo_projeto_pipesaver.xlsx'); setMessage('Modelo de projeto completo baixado.', 'success');
   }
   function findHeader(headers, aliases) { return headers.find(header => aliases.includes(normalizeHeader(header))); }
@@ -391,7 +399,7 @@
       const profilesSheetName = workbook.SheetNames.find(name => normalizeHeader(name) === 'perfis'); let importedProfiles = null, importedStocks = [], importedCuts = [], importedKerf = null;
       if (profilesSheetName) {
         const rows = XLSX.utils.sheet_to_json(workbook.Sheets[profilesSheetName], { defval:'' }); if (!rows.length) throw new Error('A aba Perfis está vazia.');
-        const headers = Object.keys(rows[0]), profileHeader = findHeader(headers,['perfil','profile']), materialHeader = findHeader(headers,['material']), typeHeader = findHeader(headers,['tiposecao','tipoperfil','sectiontype']), aHeader = findHeader(headers,['dimensaoamm','dimensaoa','diametroexternomm','larguramm']), bHeader = findHeader(headers,['dimensaobmm','dimensaob','alturamm']), thicknessHeader = findHeader(headers,['espessuramm','espessura']), kerfHeader = findHeader(headers,['kerfmm','kerf','espessuradecortemm']), legacyLengthHeader = findHeader(headers,['comprimentoblankmm','comprimentoblank']), legacyQuantityHeader = findHeader(headers,['quantidadeblank','qtdblank']);
+        const headers = Object.keys(rows[0]), profileHeader = findHeader(headers,['perfil','profile']), materialHeader = findHeader(headers,['material']), typeHeader = findHeader(headers,['tiposecao','tipoperfil','sectiontype']), aHeader = findHeader(headers,['dimensaoamm','dimensaoa','diametroexternomm','larguramm']), bHeader = findHeader(headers,['dimensaobmm','dimensaob','alturamm']), thicknessHeader = findHeader(headers,['espessuramm','espessura']), kerfHeader = findHeader(headers,['kerfmm','kerf','espessuradecortemm']), legacyLengthHeader = findHeader(headers,['comprimentoblankmm','comprimentoblank']), legacyQuantityHeader = findHeader(headers,['quantidadeblank','qtdblank']), legacyKindHeader = findHeader(headers,['tipoblank','origemblank']), legacyPriorityHeader = findHeader(headers,['priorizar','prioridade','prioritario']);
         if (!profileHeader) throw new Error('A aba Perfis deve conter a coluna Perfil.');
         const map = new Map();
         rows.forEach((row, index) => {
@@ -399,7 +407,7 @@
           const key = normalizeHeader(name); let profile = map.get(key);
           if (!profile) { profile = makeProfile(name); profile.material = String(materialHeader ? row[materialHeader] : '').trim() || 'Não informado'; profile.type = sectionTypeFrom(typeHeader ? row[typeHeader] : 'Outro perfil'); profile.dimensions = dimensionsFromSheet(profile.type, aHeader ? row[aHeader] : '', bHeader ? row[bHeader] : '', thicknessHeader ? row[thicknessHeader] : ''); map.set(key, profile); }
           if (kerfHeader && String(row[kerfHeader]).trim() !== '' && importedKerf === null) importedKerf = row[kerfHeader];
-          if (legacyLengthHeader && String(row[legacyLengthHeader]).trim() !== '') { const length = numberFrom(row[legacyLengthHeader]), rawQuantity = legacyQuantityHeader ? String(row[legacyQuantityHeader]).trim() : ''; const quantity = rawQuantity === '' ? 1 : Math.trunc(numberFrom(rawQuantity)); if (!(length > 0) || !(quantity >= 1)) throw new Error(`Barra inválida na linha ${index + 2} da aba Perfis.`); importedStocks.push({ id:`stock-${state.nextStockId++}`, profileKey:key, length, quantity }); }
+          if (legacyLengthHeader && String(row[legacyLengthHeader]).trim() !== '') { const length = numberFrom(row[legacyLengthHeader]), rawQuantity = legacyQuantityHeader ? String(row[legacyQuantityHeader]).trim() : ''; const quantity = rawQuantity === '' ? 1 : Math.trunc(numberFrom(rawQuantity)), priority = booleanFrom(legacyPriorityHeader ? row[legacyPriorityHeader] : '') || normalizeHeader(legacyKindHeader ? row[legacyKindHeader] : '') === 'retalho'; if (!(length > 0) || !(quantity >= 1)) throw new Error(`Barra inválida na linha ${index + 2} da aba Perfis.`); importedStocks.push({ id:`stock-${state.nextStockId++}`, profileKey:key, length, quantity, priority }); }
         });
         importedProfiles = [...map.values()];
 
@@ -407,9 +415,9 @@
         if (stocksSheetName) {
           importedStocks = [];
           const stockRows = XLSX.utils.sheet_to_json(workbook.Sheets[stocksSheetName], { defval:'' }); if (!stockRows.length) throw new Error('A aba Barras está vazia.');
-          const stockHeaders = Object.keys(stockRows[0]), stockProfileHeader = findHeader(stockHeaders,['perfil','profile']), stockLengthHeader = findHeader(stockHeaders,['comprimentobarramm','comprimentobarra','comprimentomm','comprimento']), stockQuantityHeader = findHeader(stockHeaders,['quantidade','qtd','qtde','quantity','qty']);
+          const stockHeaders = Object.keys(stockRows[0]), stockProfileHeader = findHeader(stockHeaders,['perfil','profile']), stockLengthHeader = findHeader(stockHeaders,['comprimentobarramm','comprimentobarra','comprimentomm','comprimento']), stockQuantityHeader = findHeader(stockHeaders,['quantidade','qtd','qtde','quantity','qty']), stockPriorityHeader = findHeader(stockHeaders,['priorizar','prioridade','prioritario']);
           if (!stockProfileHeader || !stockLengthHeader || !stockQuantityHeader) throw new Error('A aba Barras deve conter Perfil, Comprimento_barra_mm e Quantidade.');
-          stockRows.forEach((row, index) => { const profileKey = normalizeHeader(row[stockProfileHeader]), length = numberFrom(row[stockLengthHeader]), quantity = Math.trunc(numberFrom(row[stockQuantityHeader])); if (!map.has(profileKey)) throw new Error(`Perfil não encontrado na linha ${index + 2} da aba Barras.`); if (!(length > 0) || !(quantity >= 1)) throw new Error(`Barra inválida na linha ${index + 2} da aba Barras.`); importedStocks.push({ id:`stock-${state.nextStockId++}`, profileKey, length, quantity }); });
+          stockRows.forEach((row, index) => { const profileKey = normalizeHeader(row[stockProfileHeader]), length = numberFrom(row[stockLengthHeader]), quantity = Math.trunc(numberFrom(row[stockQuantityHeader])), priority = booleanFrom(stockPriorityHeader ? row[stockPriorityHeader] : ''); if (!map.has(profileKey)) throw new Error(`Perfil não encontrado na linha ${index + 2} da aba Barras.`); if (!(length > 0) || !(quantity >= 1)) throw new Error(`Barra inválida na linha ${index + 2} da aba Barras.`); importedStocks.push({ id:`stock-${state.nextStockId++}`, profileKey, length, quantity, priority }); });
         }
         if (!importedStocks.length) throw new Error('Adicione ao menos uma barra na aba Barras.');
 
@@ -437,12 +445,12 @@
   }
   function exportResult() {
     if (!state.result || !workbookAvailable()) return;
-    const project = state.result, summaryData = [['PIPESAVER — PROJETO COMPLETO'],['Projeto',project.config.projectName],['Perfis',project.profileResults.length],['Barras utilizadas',project.totalBars],['Peças',project.totalPieces],['Aproveitamento (%)',Number(project.utilization.toFixed(2))],['Perda de corte (mm)',Number(project.totalKerfLoss.toFixed(2))],['Sobra total (mm)',Number(project.totalWaste.toFixed(2))],['Gerado em',project.createdAt.toLocaleString('pt-BR')]], stockData = [['Perfil','Material','Seção','Comprimento_barra_mm','Quantidade_disponivel','Quantidade_utilizada']], planData = [['Perfil','Barra','Padrão','Comprimento_barra_mm','Ordem','Identificação','Comprimento_mm','Kerf_apos_mm','Usado_barra_mm','Sobra_barra_mm']], demandData = [['Perfil','Identificacao','Comprimento_mm','Quantidade']];
+    const project = state.result, summaryData = [['PIPESAVER — PROJETO COMPLETO'],['Projeto',project.config.projectName],['Perfis',project.profileResults.length],['Barras utilizadas',project.totalBars],['Peças',project.totalPieces],['Aproveitamento (%)',Number(project.utilization.toFixed(2))],['Perda de corte (mm)',Number(project.totalKerfLoss.toFixed(2))],['Sobra total (mm)',Number(project.totalWaste.toFixed(2))],['Gerado em',project.createdAt.toLocaleString('pt-BR')]], stockData = [['Perfil','Material','Seção','Comprimento_barra_mm','Quantidade_disponivel','Priorizar','Quantidade_utilizada']], planData = [['Perfil','Barra','Padrão','Comprimento_barra_mm','Prioritária','Ordem','Identificação','Comprimento_mm','Kerf_apos_mm','Usado_barra_mm','Sobra_barra_mm']], demandData = [['Perfil','Identificacao','Comprimento_mm','Quantidade']];
     project.profileResults.forEach(result => {
       const usage = new Map(); result.bins.forEach(bin => usage.set(bin.stockType.id,(usage.get(bin.stockType.id)||0)+1));
-      result.config.stockTypes.forEach(stock => stockData.push([result.config.name,result.config.material,profileDescription(result.config),stock.length,stock.quantity,usage.get(stock.id)||0]));
+      result.config.stockTypes.forEach(stock => stockData.push([result.config.name,result.config.material,profileDescription(result.config),stock.length,stock.quantity,stock.priority?'Sim':'Não',usage.get(stock.id)||0]));
       const patternMap = new Map(); groupedPatterns(result).forEach((group,index) => group.bins.forEach(bar => patternMap.set(bar,`PC-${String(index+1).padStart(2,'0')}`)));
-      result.bins.forEach((bin,barIndex) => bin.items.forEach((item,itemIndex) => planData.push([result.config.name,barIndex+1,patternMap.get(barIndex+1),bin.stockLength,itemIndex+1,item.id,item.length,itemIndex<bin.items.length-1?result.config.kerf:0,Number(bin.used.toFixed(3)),Number(bin.waste.toFixed(3))])));
+      result.bins.forEach((bin,barIndex) => bin.items.forEach((item,itemIndex) => planData.push([result.config.name,barIndex+1,patternMap.get(barIndex+1),bin.stockLength,bin.stockType.priority?'Sim':'Não',itemIndex+1,item.id,item.length,itemIndex<bin.items.length-1?result.config.kerf:0,Number(bin.used.toFixed(3)),Number(bin.waste.toFixed(3))])));
       result.config.cuts.forEach(cut => demandData.push([result.config.name,cut.id,cut.length,cut.quantity]));
     });
     const workbook = XLSX.utils.book_new(); [['Resumo',summaryData],['Estoque',stockData],['Plano_de_corte',planData],['Demanda',demandData]].forEach(([name,data]) => XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet(data),name)); XLSX.writeFile(workbook,`${safeFileName(project.config.projectName)}_pipesaver.xlsx`); setMessage('Projeto completo exportado para Excel.','success');
