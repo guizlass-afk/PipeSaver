@@ -37,7 +37,7 @@ button { color: inherit; }
 .field { min-width: 0; display: block; color: #53636c; font-size: 10px; font-weight: 700; }.field.full { margin-bottom: 9px; }
 .field input, .field select { width: 100%; height: 36px; margin-top: 5px; padding: 7px 9px; border: 1px solid #cbd7db; border-radius: 7px; outline: none; background: #fff; color: var(--ink); }
 .field input:focus, .field select:focus, .cut-input:focus { border-color: var(--teal); box-shadow: 0 0 0 2px rgba(13,139,132,.11); }
-.dimensions { margin-top: 9px; }.dimensions:empty { display: none; }
+.dimensions { margin-top: 9px; }.dimensions:empty { display: none; }.dimensions .field > span { min-height: 24px; display: flex; align-items: flex-end; line-height: 1.2; }
 .profile-switcher { margin-bottom: 9px; padding: 9px; border: 1px solid #dce5e7; border-radius: 8px; background: #f7fafb; }
 .profile-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; color: #53636c; font-size: 10px; font-weight: 750; }
 .profile-list-heading button { min-height: 28px; padding: 0 9px; border: 1px solid #cbd7db; border-radius: 6px; background: #fff; color: var(--teal-dark); font-size: 9px; font-weight: 800; cursor: pointer; }.profile-list-heading button b { margin-right: 4px; color: var(--teal); font-size: 14px; }.profile-list-heading button:hover { border-color: var(--teal); background: var(--teal-soft); }

@@ -77,6 +77,7 @@
   function renderDimensionFields(profile) {
     const definition = sectionDefinitions[profile.type];
     ui.dimensionFields.innerHTML = '';
+    ui.dimensionFields.style.gridTemplateColumns = `repeat(${Math.min(3, definition.fields.length)}, minmax(0, 1fr))`;
     definition.fields.forEach(([key, label, initial, kind]) => {
       const wrapper = document.createElement('label'); wrapper.className = 'field';
       const inputType = kind === 'text' ? 'text' : 'number', value = profile.dimensions[key] ?? initial;
