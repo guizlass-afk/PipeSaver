@@ -45,15 +45,15 @@
       </section>
 
       <section class="panel">
-        <div class="section-heading"><span>2</span><div><h2>Barra e ferramenta</h2><p>Valores em milímetros</p></div></div>
-        <div class="stock-heading"><strong>Blanks disponíveis</strong><small>Qtd. vazia = ilimitada</small></div>
-        <div class="stock-columns"><span>Tipo</span><span>Comprimento</span><span>Qtd.</span><span></span></div>
+        <div class="section-heading"><span>2</span><div><h2>Barras disponíveis</h2><p>Informe o estoque de cada perfil</p></div></div>
+        <div class="stock-heading"><strong>Lista de barras</strong><small>Valores em milímetros</small></div>
+        <div class="stock-columns"><span>Perfil</span><span>Comprimento</span><span>Qtd.</span><span></span></div>
         <div id="stockBody" class="stock-list"></div>
-        <button id="addStockButton" class="add-row-button stock-add-button" type="button"><span>+</span> Adicionar blank ou retalho</button>
+        <button id="addStockButton" class="add-row-button stock-add-button" type="button"><span>+</span> Adicionar barra</button>
         <div class="tool-field">
           <label class="field"><span>Espessura de corte</span><input id="kerf" type="number" value="3" min="0" step="0.1"></label>
         </div>
-        <p class="field-help"><strong>Blank</strong> é qualquer barra bruta ou retalho disponível. A espessura de corte considera os cortes entre peças e o corte final que separa a sobra.</p>
+        <p class="field-help">Cadastre cada comprimento disponível e sua quantidade. A espessura de corte considera os cortes entre peças e o corte final que separa a sobra.</p>
       </section>
 
       <section class="panel cuts-panel">
@@ -62,12 +62,8 @@
           <button id="templateButton" class="ghost-button" type="button"><span aria-hidden="true">⇩</span> Baixar modelo</button>
           <label class="ghost-button import-button"><span aria-hidden="true">⇧</span> Importar Excel<input id="excelInput" type="file" accept=".xlsx,.xls,.csv" hidden></label>
         </div>
-        <div class="cuts-table-wrap">
-          <table class="cuts-table">
-            <thead><tr><th>Identificação</th><th>Comprimento</th><th>Qtd.</th><th></th></tr></thead>
-            <tbody id="cutsBody"></tbody>
-          </table>
-        </div>
+        <div class="cut-columns"><span>Perfil</span><span>Identificação</span><span>Comprimento</span><span>Qtd.</span><span></span></div>
+        <div id="cutsBody" class="cuts-list"></div>
         <button id="addCutButton" class="add-row-button" type="button"><span>+</span> Adicionar medida</button>
       </section>
 
@@ -87,7 +83,7 @@
       <section class="result-area">
         <div id="resultContent" hidden>
           <div class="metrics">
-            <article><span class="metric-icon bars">▤</span><div><small>Barras necessárias</small><strong id="metricBars">—</strong></div></article>
+            <article><span class="metric-icon bars">▤</span><div><small>Barras utilizadas</small><strong id="metricBars">—</strong></div></article>
             <article><span class="metric-icon usage">◔</span><div><small>Aproveitamento</small><strong id="metricUsage">—</strong></div></article>
             <article><span class="metric-icon pieces">◇</span><div><small>Peças</small><strong id="metricPieces">—</strong></div></article>
             <article><span class="metric-icon waste">↘</span><div><small>Sobra total</small><strong id="metricWaste">—</strong></div></article>
@@ -102,7 +98,7 @@
             <div class="card-heading"><div><h2>Lista de corte</h2><p>Padrões iguais são agrupados para facilitar a produção</p></div></div>
             <div class="result-table-wrap">
               <table class="result-table">
-                <thead><tr><th>Perfil</th><th>Padrão</th><th>Blank utilizado</th><th>Qtd.</th><th>Sequência de cortes</th><th>Usado</th><th>Sobra/barra</th><th>Aproveitamento</th></tr></thead>
+                <thead><tr><th>Perfil</th><th>Padrão</th><th>Barra utilizada</th><th>Qtd.</th><th>Sequência de cortes</th><th>Usado</th><th>Sobra/barra</th><th>Aproveitamento</th></tr></thead>
                 <tbody id="patternsBody"></tbody>
               </table>
             </div>
