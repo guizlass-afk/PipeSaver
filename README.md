@@ -17,6 +17,7 @@ Aplicação publicada: [guizlass-afk.github.io/PipeSaver](https://guizlass-afk.g
 - mapa visual separado por perfil e agrupamento de padrões de corte repetidos;
 - consolidação de barras, peças, aproveitamento, perda de corte e sobra do projeto inteiro;
 - exportação detalhada do resultado para Excel e versão preparada para impressão.
+- seletor com bandeiras e interface em 12 idiomas: português, inglês, espanhol, mandarim, hindi, árabe, francês, bengali, russo, alemão, italiano e japonês.
 
 ## Como usar
 
@@ -92,6 +93,8 @@ O algoritmo é heurístico em listas grandes e em estoques mistos. Quando um per
 
 - `index.html`: estrutura da interface;
 - `styles.css`: identidade visual e layout responsivo;
+- `i18n.js`: traduções, idiomas e configuração das bandeiras;
+- `flags/`: bandeiras SVG usadas pelo seletor de idiomas;
 - `app.js`: importação, otimização, visualização e exportação;
 - `vendor/xlsx.full.min.js`: SheetJS Community Edition 0.20.3;
 - `tests/browser-tests.html`: testes locais do algoritmo e da interface.

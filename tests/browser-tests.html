@@ -18,6 +18,20 @@
         if (doc.getElementById('emptyState')) throw new Error('O painel vazio ainda está presente');
         if (doc.querySelector('.brand-name').textContent.replace(/\s/g, '') !== 'PipeSaver' || doc.querySelector('.brand small')) throw new Error('A marca PipeSaver não foi compactada corretamente');
         if (core.numberFrom('1.250,5') !== 1250.5) throw new Error('Conversão numérica pt-BR inválida');
+        const languageSelect = doc.getElementById('languageSelect'), languageOptions = doc.querySelectorAll('#languageMenu [data-language]'), currentFlag = doc.getElementById('currentFlag');
+        if (languageSelect.options.length !== 12 || languageOptions.length !== 12 || !currentFlag.getAttribute('src').endsWith('flags/br.svg')) throw new Error('Seletor de idiomas ou bandeira do Brasil inválido');
+        await wait(50);
+        if (!currentFlag.complete || !currentFlag.naturalWidth) throw new Error('Arquivo SVG da bandeira não foi carregado');
+        const languageChecks = { 'en-US':'Cutting plan', 'es-ES':'Plan de corte', 'zh-CN':'切割方案', 'hi-IN':'कटिंग प्लान', 'ar-SA':'خطة القطع', 'fr-FR':'Plan de coupe', 'bn-BD':'কাটিং প্ল্যান', 'ru-RU':'Карта раскроя', 'de-DE':'Schnittplan', 'it-IT':'Piano di taglio', 'ja-JP':'切断プラン' };
+        for (const [language, expected] of Object.entries(languageChecks)) {
+          languageSelect.value = language; languageSelect.dispatchEvent(new Event('change'));
+          if (doc.querySelector('[data-i18n="cuttingPlan"]').textContent !== expected) throw new Error(`Tradução inválida: ${language}`);
+        }
+        if (!currentFlag.getAttribute('src').endsWith('flags/jp.svg')) throw new Error('Bandeira selecionada não foi atualizada');
+        languageSelect.value = 'ar-SA'; languageSelect.dispatchEvent(new Event('change'));
+        if (doc.documentElement.dir !== 'rtl') throw new Error('Direção RTL do árabe inválida');
+        languageSelect.value = 'pt-BR'; languageSelect.dispatchEvent(new Event('change'));
+        if (doc.documentElement.dir !== 'ltr' || !currentFlag.getAttribute('src').endsWith('flags/br.svg')) throw new Error('Português ou bandeira do Brasil não foram restaurados');
 
         const base = { projectName:'Teste', material:'Aço', profile:{type:'rectTube',label:'Tubo retangular',dimensions:{width:80,height:40,thickness:3}}, stockLength:6000 };
         const noKerf = core.optimizeCuttingList({ ...base, kerf:0, cuts:[{id:'A',length:3000,quantity:2,colorIndex:0}] });
@@ -153,7 +167,7 @@
         const roundTripCuts = win.XLSX.utils.sheet_to_json(downloadedWorkbook.Sheets.Cortes, {defval:''});
         if (roundTripCuts[0].Observacao !== 'Corte principal' || roundTripCuts[1].Observacao !== 'Separar por lote') throw new Error('Observações não foram preservadas ao reabrir e salvar o projeto');
         win.XLSX.writeFile = originalWriteFile;
-        log.push('Interface multi-perfil: OK', 'Modelo Excel completo: OK', 'Salvar e retomar projeto: OK', 'Importação XLSX simples: OK', 'Importação de projeto completo: OK', 'Biblioteca local: OK');
+        log.push('Interface multi-perfil: OK', 'Idiomas e bandeiras: OK (12 opções)', 'Modelo Excel completo: OK', 'Salvar e retomar projeto: OK', 'Importação XLSX simples: OK', 'Importação de projeto completo: OK', 'Biblioteca local: OK');
         document.getElementById('status').textContent = 'PASS';
       } catch (error) {
         document.getElementById('status').textContent = 'FAIL';

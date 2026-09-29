@@ -3,6 +3,8 @@
 
   const $ = id => document.getElementById(id);
   const ui = {
+    languageSelect: $('languageSelect'), languagePicker: $('languagePicker'), languageButton: $('languageButton'),
+    languageMenu: $('languageMenu'), currentFlag: $('currentFlag'), currentLanguage: $('currentLanguage'),
     projectName: $('projectName'), profileList: $('profileList'), addProfileButton: $('addProfileButton'),
     profileName: $('profileName'), material: $('material'),
     sectionType: $('sectionType'), dimensionFields: $('dimensionFields'), stockBody: $('stockBody'),
@@ -14,19 +16,34 @@
     patternsBody: $('patternsBody'), printButton: $('printButton'), exportButton: $('exportButton')
   };
 
+  const translations = window.PipeSaverI18n?.translations || { 'pt-BR': {} };
+  const languageMeta = window.PipeSaverI18n?.meta || { 'pt-BR': { label:'Português', flag:'br' } };
+  const languageCodes = Object.keys(languageMeta);
+  function initialLanguage() {
+    let saved = '';
+    try { saved = localStorage.getItem('pipesaver-language') || ''; } catch (_) {}
+    if (languageCodes.includes(saved)) return saved;
+    return 'pt-BR';
+  }
+
   const sectionDefinitions = {
-    roundTube: { label: 'Tubo redondo', fields: [['diameter', 'Diâmetro externo', 60], ['thickness', 'Espessura', 3]] },
-    squareTube: { label: 'Tubo quadrado', fields: [['side', 'Lado', 50], ['thickness', 'Espessura', 3]] },
-    rectTube: { label: 'Tubo retangular', fields: [['width', 'Largura', 80], ['height', 'Altura', 40], ['thickness', 'Espessura', 3]] },
-    roundBar: { label: 'Barra redonda', fields: [['diameter', 'Diâmetro', 30]] },
-    flatBar: { label: 'Barra chata', fields: [['width', 'Largura', 50], ['thickness', 'Espessura', 6]] },
-    angle: { label: 'Cantoneira', fields: [['legA', 'Aba A', 50], ['legB', 'Aba B', 50], ['thickness', 'Espessura', 5]] },
-    custom: { label: 'Outro perfil', fields: [['description', 'Descrição da seção', 'Perfil especial', 'text']] }
+    roundTube: { labelKey: 'roundTube', fields: [['diameter', 'outerDiameter', 60], ['thickness', 'thickness', 3]] },
+    squareTube: { labelKey: 'squareTube', fields: [['side', 'side', 50], ['thickness', 'thickness', 3]] },
+    rectTube: { labelKey: 'rectTube', fields: [['width', 'width', 80], ['height', 'height', 40], ['thickness', 'thickness', 3]] },
+    roundBar: { labelKey: 'roundBar', fields: [['diameter', 'diameter', 30]] },
+    flatBar: { labelKey: 'flatBar', fields: [['width', 'width', 50], ['thickness', 'thickness', 6]] },
+    angle: { labelKey: 'angle', fields: [['legA', 'legA', 50], ['legB', 'legB', 50], ['thickness', 'thickness', 5]] },
+    custom: { labelKey: 'customProfile', fields: [['description', 'sectionDescription', 'Perfil especial', 'text']] }
   };
   const palette = ['#0c8b84', '#ef7b3d', '#5078a5', '#a56d9d', '#c49332', '#4595aa', '#a95d63', '#668c55', '#7769ad'];
-  const state = { profiles: [], stocks: [], cuts: [], activeProfileId: null, nextProfileId: 1, nextStockId: 1, nextCutId: 1, result: null };
+  const state = { profiles: [], stocks: [], cuts: [], activeProfileId: null, nextProfileId: 1, nextStockId: 1, nextCutId: 1, result: null, language: initialLanguage() };
 
-  function formatNumber(value, digits = 1) { return Number(value).toLocaleString('pt-BR', { maximumFractionDigits: digits }); }
+  function t(key, values = {}) {
+    const template = translations[state.language]?.[key] ?? translations['en-US']?.[key] ?? translations['pt-BR']?.[key] ?? key;
+    return String(template).replace(/\{(\w+)\}/g, (_, name) => values[name] ?? `{${name}}`);
+  }
+  function sectionLabel(type) { return t(sectionDefinitions[type]?.labelKey || 'customProfile'); }
+  function formatNumber(value, digits = 1) { return Number(value).toLocaleString(state.language, { maximumFractionDigits: digits }); }
   function numberFrom(value) {
     if (typeof value === 'number') return value;
     let text = String(value ?? '').trim().replace(/\s/g, '');
@@ -39,18 +56,42 @@
   function safeFileName(value) { return String(value || 'pipesaver').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60) || 'pipesaver'; }
   function escapeHtml(value) { const div = document.createElement('div'); div.textContent = value; return div.innerHTML; }
   function setMessage(text, type = '') { ui.message.textContent = text; ui.message.className = `message ${type}`.trim(); }
+  function setLanguageMenu(open) {
+    ui.languageMenu.hidden = !open;
+    ui.languageButton.setAttribute('aria-expanded', String(open));
+    if (open) ui.languageMenu.querySelector(`[data-language="${state.language}"]`)?.focus();
+  }
+  function applyLanguage(language, persist = true) {
+    if (state.profiles.length) serializeActiveProfile();
+    state.language = languageCodes.includes(language) ? language : 'pt-BR';
+    document.documentElement.lang = state.language;
+    document.documentElement.dir = state.language.startsWith('ar') ? 'rtl' : 'ltr';
+    document.title = t('pageTitle');
+    const meta = languageMeta[state.language];
+    ui.languageSelect.value = state.language;
+    ui.currentFlag.src = `flags/${meta.flag}.svg`;
+    ui.currentFlag.alt = '';
+    ui.currentLanguage.textContent = meta.label;
+    ui.languageButton.setAttribute('aria-label', t('languageLabel', { language:meta.label }));
+    ui.languageMenu.querySelectorAll('[data-language]').forEach(button => button.setAttribute('aria-selected', String(button.dataset.language === state.language)));
+    document.querySelectorAll('[data-i18n]').forEach(element => { element.textContent = t(element.dataset.i18n); });
+    document.querySelectorAll('[data-i18n-placeholder]').forEach(element => { element.placeholder = t(element.dataset.i18nPlaceholder); });
+    if (state.profiles.length) { renderActiveProfile(); renderRelationRows(); }
+    if (state.result) renderResult(state.result);
+    if (persist) try { localStorage.setItem('pipesaver-language', state.language); } catch (_) {}
+  }
   function invalidateResult() {
     if (!state.result) return;
     state.result = null; ui.resultContent.hidden = true; ui.exportButton.disabled = ui.printButton.disabled = true;
-    ui.resultSubtitle.textContent = 'Dados alterados — gere novamente o plano de corte';
+    ui.resultSubtitle.textContent = t('changedData');
   }
   function defaultDimensions(type) {
     return Object.fromEntries(sectionDefinitions[type].fields.map(([key, , value]) => [key, value]));
   }
-  function makeProfile(name = `Perfil ${state.nextProfileId}`) {
+  function makeProfile(name = t('profileDefault', { number:state.nextProfileId })) {
     const profileNumber = state.nextProfileId++;
     return {
-      id: `profile-${profileNumber}`, name, material: 'Aço carbono', type: 'rectTube', dimensions: defaultDimensions('rectTube')
+      id: `profile-${profileNumber}`, name, material: t('carbonSteel'), type: 'rectTube', dimensions: defaultDimensions('rectTube')
     };
   }
   function activeProfile() { return state.profiles.find(profile => profile.id === state.activeProfileId); }
@@ -59,15 +100,16 @@
     ui.profileList.innerHTML = '';
     state.profiles.forEach((profile, index) => {
       const row = document.createElement('div'); row.className = `profile-list-item${profile.id === state.activeProfileId ? ' active' : ''}`; row.dataset.profileId = profile.id; row.setAttribute('role', 'option'); row.setAttribute('aria-selected', String(profile.id === state.activeProfileId));
-      const select = document.createElement('button'); select.type = 'button'; select.className = 'profile-list-select'; select.innerHTML = `<strong>${escapeHtml(profile.name || `Perfil ${index + 1}`)}</strong><small>${escapeHtml(sectionDefinitions[profile.type]?.label || 'Outro perfil')} · ${escapeHtml(profileDescription(profile))}</small>`;
+      const fallbackName = t('profileDefault', { number:index + 1 });
+      const select = document.createElement('button'); select.type = 'button'; select.className = 'profile-list-select'; select.innerHTML = `<strong>${escapeHtml(profile.name || fallbackName)}</strong><small>${escapeHtml(sectionLabel(profile.type))} · ${escapeHtml(profileDescription(profile))}</small>`;
       select.addEventListener('click', () => { if (state.activeProfileId === profile.id) return; serializeActiveProfile(); state.activeProfileId = profile.id; renderActiveProfile(); });
-      const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'profile-list-remove'; remove.title = 'Remover perfil'; remove.setAttribute('aria-label', `Remover ${profile.name || `Perfil ${index + 1}`}`); remove.textContent = '×'; remove.disabled = state.profiles.length === 1; remove.addEventListener('click', () => removeProfile(profile.id));
+      const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'profile-list-remove'; remove.title = t('removeProfile'); remove.setAttribute('aria-label', t('removeNamed', { name:profile.name || fallbackName })); remove.textContent = '×'; remove.disabled = state.profiles.length === 1; remove.addEventListener('click', () => removeProfile(profile.id));
       row.append(select, remove); ui.profileList.appendChild(row);
     });
     refreshRelationSelects();
   }
   function profileOptionsMarkup(selectedId) {
-    return state.profiles.map((profile, index) => `<option value="${profile.id}"${profile.id === selectedId ? ' selected' : ''}>${escapeHtml(profile.name || `Perfil ${index + 1}`)}</option>`).join('');
+    return state.profiles.map((profile, index) => `<option value="${profile.id}"${profile.id === selectedId ? ' selected' : ''}>${escapeHtml(profile.name || t('profileDefault', { number:index + 1 }))}</option>`).join('');
   }
   function refreshRelationSelects() {
     document.querySelectorAll('.stock-profile, .cut-profile').forEach(select => {
@@ -79,10 +121,10 @@
     const definition = sectionDefinitions[profile.type];
     ui.dimensionFields.innerHTML = '';
     ui.dimensionFields.style.gridTemplateColumns = `repeat(${Math.min(3, definition.fields.length)}, minmax(0, 1fr))`;
-    definition.fields.forEach(([key, label, initial, kind]) => {
+    definition.fields.forEach(([key, labelKey, initial, kind]) => {
       const wrapper = document.createElement('label'); wrapper.className = 'field';
       const inputType = kind === 'text' ? 'text' : 'number', value = profile.dimensions[key] ?? initial;
-      wrapper.innerHTML = `<span>${label}${inputType === 'number' ? ' (mm)' : ''}</span><input data-dimension="${key}" type="${inputType}" value="${String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"${inputType === 'number' ? ' min="0.01" step="0.1"' : ' maxlength="80"'}>`;
+      wrapper.innerHTML = `<span>${escapeHtml(t(labelKey))}${inputType === 'number' ? ' (mm)' : ''}</span><input data-dimension="${key}" type="${inputType}" value="${String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"${inputType === 'number' ? ' min="0.01" step="0.1"' : ' maxlength="80"'}>`;
       wrapper.querySelector('input').addEventListener('change', invalidateResult);
       ui.dimensionFields.appendChild(wrapper);
     });
@@ -94,7 +136,7 @@
   function addStockRow(values = {}, focus = false) {
     const row = document.createElement('div'); row.className = 'stock-row'; row.dataset.stockId = values.id || `stock-${state.nextStockId++}`;
     const profileId = values.profileId || state.activeProfileId || state.profiles[0]?.id;
-    row.innerHTML = `<select class="stock-profile" aria-label="Perfil da barra">${profileOptionsMarkup(profileId)}</select><input class="stock-length" type="number" value="${values.length ?? 6000}" min="1" step="0.1" aria-label="Comprimento da barra"><input class="stock-quantity" type="number" value="${values.quantity ?? 1}" min="1" max="9999" step="1" aria-label="Quantidade disponível"><label class="stock-priority-label" title="Consumir estas barras antes das demais"><input class="stock-priority" type="checkbox"${values.priority ? ' checked' : ''} aria-label="Priorizar esta barra"></label><button class="remove-stock" type="button" title="Remover barra" aria-label="Remover barra">×</button>`;
+    row.innerHTML = `<select class="stock-profile" aria-label="${escapeHtml(t('stockProfile'))}">${profileOptionsMarkup(profileId)}</select><input class="stock-length" type="number" value="${values.length ?? 6000}" min="1" step="0.1" aria-label="${escapeHtml(t('stockLength'))}"><input class="stock-quantity" type="number" value="${values.quantity ?? 1}" min="1" max="9999" step="1" aria-label="${escapeHtml(t('stockQuantity'))}"><label class="stock-priority-label" title="${escapeHtml(t('priorityHelp'))}"><input class="stock-priority" type="checkbox"${values.priority ? ' checked' : ''} aria-label="${escapeHtml(t('priorityBar'))}"></label><button class="remove-stock" type="button" title="${escapeHtml(t('removeBar'))}" aria-label="${escapeHtml(t('removeBar'))}">×</button>`;
     row.querySelectorAll('input,select').forEach(element => element.addEventListener('change', invalidateResult));
     row.querySelector('.remove-stock').addEventListener('click', () => { if (ui.stockBody.children.length <= 1) return; row.remove(); updateStockRemoveButtons(); syncRelationRows(); invalidateResult(); });
     ui.stockBody.appendChild(row); updateStockRemoveButtons(); if (focus) row.querySelector('.stock-length').focus(); return row;
@@ -107,7 +149,7 @@
     const row = document.createElement('div'); row.className = 'cut-row'; row.dataset.rowId = values.rowId || `cut-${state.nextCutId++}`;
     row.dataset.observation = values.observation || '';
     const profileId = values.profileId || state.activeProfileId || state.profiles[0]?.id;
-    row.innerHTML = `<select class="cut-input cut-profile" aria-label="Perfil da peça">${profileOptionsMarkup(profileId)}</select><input class="cut-input cut-id" value="${String(values.id ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')}" placeholder="Ex.: P01" maxlength="60" aria-label="Identificação da peça"><input class="cut-input cut-length" type="number" value="${values.length ?? ''}" placeholder="0" min="0.01" step="0.1" aria-label="Comprimento da peça"><input class="cut-input cut-quantity" type="number" value="${values.quantity ?? 1}" min="1" max="9999" step="1" aria-label="Quantidade de peças"><button class="remove-cut" type="button" title="Remover medida" aria-label="Remover medida">×</button>`;
+    row.innerHTML = `<select class="cut-input cut-profile" aria-label="${escapeHtml(t('cutProfile'))}">${profileOptionsMarkup(profileId)}</select><input class="cut-input cut-id" value="${String(values.id ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')}" placeholder="Ex.: P01" maxlength="60" aria-label="${escapeHtml(t('pieceIdentification'))}"><input class="cut-input cut-length" type="number" value="${values.length ?? ''}" placeholder="0" min="0.01" step="0.1" aria-label="${escapeHtml(t('pieceLength'))}"><input class="cut-input cut-quantity" type="number" value="${values.quantity ?? 1}" min="1" max="9999" step="1" aria-label="${escapeHtml(t('pieceQuantity'))}"><button class="remove-cut" type="button" title="${escapeHtml(t('removeMeasure'))}" aria-label="${escapeHtml(t('removeMeasure'))}">×</button>`;
     row.querySelectorAll('input,select').forEach(input => input.addEventListener('change', invalidateResult));
     row.querySelector('.remove-cut').addEventListener('click', () => { if (ui.cutsBody.children.length <= 1) return; row.remove(); updateCutRemoveButtons(); syncRelationRows(); invalidateResult(); });
     ui.cutsBody.appendChild(row); updateCutRemoveButtons(); if (focus) row.querySelector('.cut-id').focus(); return row;
@@ -143,7 +185,7 @@
     const index = state.profiles.findIndex(profile => profile.id === profileId); if (index < 0) return;
     state.profiles.splice(index, 1); state.stocks = state.stocks.filter(stock => stock.profileId !== profileId); state.cuts = state.cuts.filter(cut => cut.profileId !== profileId);
     if (state.activeProfileId === profileId) state.activeProfileId = state.profiles[Math.max(0, index - 1)].id;
-    renderActiveProfile(); renderRelationRows(); invalidateResult(); setMessage('Perfil e suas linhas de barras e cortes foram removidos.');
+    renderActiveProfile(); renderRelationRows(); invalidateResult(); setMessage(t('profileRemoved'));
   }
 
   function profileDescription(profile) {
@@ -155,15 +197,15 @@
       case 'roundBar': return `Ø ${formatNumber(d.diameter)} mm`;
       case 'flatBar': return `${formatNumber(d.width)} × ${formatNumber(d.thickness)} mm`;
       case 'angle': return `${formatNumber(d.legA)} × ${formatNumber(d.legB)} × ${formatNumber(d.thickness)} mm`;
-      default: return String(d.description || 'Perfil personalizado');
+      default: return String(d.description || t('customDescription'));
     }
   }
   function validatedDimensions(profile) {
     const dimensions = {};
-    for (const [key, label, , kind] of sectionDefinitions[profile.type].fields) {
+    for (const [key, labelKey, , kind] of sectionDefinitions[profile.type].fields) {
       const raw = profile.dimensions[key];
       if (kind === 'text') { if (!String(raw || '').trim()) throw new Error(`Informe a descrição da seção em “${profile.name}”.`); dimensions[key] = String(raw).trim(); }
-      else { const value = numberFrom(raw); if (!(value > 0)) throw new Error(`Informe ${label.toLowerCase()} válido em “${profile.name}”.`); dimensions[key] = value; }
+      else { const value = numberFrom(raw); if (!(value > 0)) throw new Error(`Informe ${t(labelKey).toLowerCase()} válido em “${profile.name}”.`); dimensions[key] = value; }
     }
     return dimensions;
   }
@@ -186,14 +228,14 @@
         const length = numberFrom(stock.length), quantity = Math.trunc(numberFrom(stock.quantity));
         if (!(length > 0)) throw new Error(`Comprimento de barra inválido no perfil “${profile.name}”.`);
         if (!(quantity >= 1 && quantity <= 9999)) throw new Error(`Quantidade de barras inválida no perfil “${profile.name}”.`);
-        return { id: stock.id || `stock-${profileIndex}-${stockIndex}`, kind: 'commercial', label: stock.priority ? 'Barra prioritária' : 'Barra disponível', length, quantity, priority: Boolean(stock.priority) };
+        return { id: stock.id || `stock-${profileIndex}-${stockIndex}`, kind: 'commercial', labelKey: stock.priority ? 'preferredBar' : 'availableBar', length, quantity, priority: Boolean(stock.priority) };
       });
       if (!stocks.length) throw new Error(`Adicione pelo menos uma barra ao perfil “${profile.name}”.`);
       const largest = Math.max(...stocks.map(stock => stock.length));
       const oversized = cuts.find(cut => cut.length > largest + 1e-7);
       if (oversized) throw new Error(`A peça “${oversized.id}” do perfil “${profile.name}” é maior que todas as barras disponíveis.`);
       const type = sectionDefinitions[profile.type] ? profile.type : 'custom';
-      const normalized = { id: profile.id, name: profile.name.trim() || `Perfil ${profileIndex + 1}`, material: profile.material.trim() || 'Não informado', type, label: sectionDefinitions[type].label, dimensions: validatedDimensions({ ...profile, type }), kerf, stockTypes: stocks, cuts };
+      const normalized = { id: profile.id, name: profile.name.trim() || t('profileDefault', { number:profileIndex + 1 }), material: profile.material.trim() || t('notProvided'), type, dimensions: validatedDimensions({ ...profile, type }), kerf, stockTypes: stocks, cuts };
       configuredProfiles.push(normalized);
     });
     if (!configuredProfiles.length) throw new Error('Adicione medidas a pelo menos um perfil do projeto.');
@@ -276,7 +318,7 @@
     search(0); return { bins: best, completed: !timedOut || best.length === lowerBound };
   }
   function optimizeCuttingList(inputConfig) {
-    const stockTypes = Array.isArray(inputConfig.stockTypes) && inputConfig.stockTypes.length ? inputConfig.stockTypes.map((type, index) => ({ id: String(type.id ?? `stock-${index + 1}`), kind: type.kind === 'scrap' ? 'scrap' : 'commercial', label: type.label || (type.priority ? 'Barra prioritária' : 'Barra disponível'), length: Number(type.length), quantity: type.quantity === null || type.quantity === '' || type.quantity === undefined ? null : Math.max(1, Math.trunc(Number(type.quantity))), priority: Boolean(type.priority) })) : [{ id: 'stock-1', kind: 'commercial', label: 'Barra disponível', length: Number(inputConfig.stockLength), quantity: null, priority: false }];
+    const stockTypes = Array.isArray(inputConfig.stockTypes) && inputConfig.stockTypes.length ? inputConfig.stockTypes.map((type, index) => ({ id: String(type.id ?? `stock-${index + 1}`), kind: type.kind === 'scrap' ? 'scrap' : 'commercial', labelKey: type.labelKey || (type.priority ? 'preferredBar' : 'availableBar'), length: Number(type.length), quantity: type.quantity === null || type.quantity === '' || type.quantity === undefined ? null : Math.max(1, Math.trunc(Number(type.quantity))), priority: Boolean(type.priority) })) : [{ id: 'stock-1', kind: 'commercial', labelKey: 'availableBar', length: Number(inputConfig.stockLength), quantity: null, priority: false }];
     const config = { ...inputConfig, stockTypes };
     const items = []; config.cuts.forEach((cut, cutIndex) => { for (let count = 1; count <= cut.quantity; count++) items.push({ ...cut, cutIndex, instance: count, effective: cut.length + config.kerf }); });
     if (!items.length) throw new Error('Nenhuma peça informada.');
@@ -319,30 +361,31 @@
   function renderResult(projectResult) {
     state.result = projectResult; ui.resultContent.hidden = false; ui.exportButton.disabled = ui.printButton.disabled = false;
     ui.metricBars.textContent = projectResult.totalBars; ui.metricUsage.textContent = `${formatNumber(projectResult.utilization, 1)}%`; ui.metricPieces.textContent = projectResult.totalPieces; ui.metricWaste.textContent = `${formatNumber(projectResult.totalWaste, 1)} mm`;
-    ui.profileBadge.textContent = `${projectResult.profileResults.length} perfil(is)`;
-    ui.resultSubtitle.textContent = `${projectResult.profileResults.length} perfil(is) · ${projectResult.totalBars} barra(s) · ${projectResult.totalPieces} peça(s) · ${projectResult.optimal ? 'mínimo matemático atingido' : 'estoque misto otimizado'}`;
+    ui.profileBadge.textContent = `${projectResult.profileResults.length} ${t('profiles')}`;
+    ui.resultSubtitle.textContent = t('resultSummary', { profiles:`${projectResult.profileResults.length} ${t('profiles')}`, bars:`${projectResult.totalBars} ${t('bars')}`, pieces:`${projectResult.totalPieces} ${t('pieces').toLowerCase()}`, status:t(projectResult.optimal ? 'mathematicalMinimum' : 'mixedStockOptimized') });
     ui.barsVisual.innerHTML = ''; const maxStock = Math.max(...projectResult.profileResults.flatMap(result => result.bins.map(bin => bin.stockLength)));
     projectResult.profileResults.forEach((result, profileIndex) => {
-      const heading = document.createElement('div'); heading.className = 'profile-result-heading'; heading.innerHTML = `${escapeHtml(result.config.name)}<span>${escapeHtml(result.config.label)} · ${escapeHtml(profileDescription(result.config))} · ${result.bins.length} barra(s)</span>`; ui.barsVisual.appendChild(heading);
+      const heading = document.createElement('div'); heading.className = 'profile-result-heading'; heading.innerHTML = `${escapeHtml(result.config.name)}<span>${escapeHtml(sectionLabel(result.config.type))} · ${escapeHtml(profileDescription(result.config))} · ${result.bins.length} ${escapeHtml(t('bars'))}</span>`; ui.barsVisual.appendChild(heading);
       result.bins.forEach((bin, index) => {
         const row = document.createElement('div'); row.className = 'bar-row';
-        const label = document.createElement('div'); label.className = 'bar-label'; label.innerHTML = `BARRA ${index + 1}<small>${escapeHtml(bin.stockType.label)} · ${formatNumber(bin.stockLength)} mm</small>`;
-        const track = document.createElement('div'); track.className = 'bar-track'; track.style.width = `${Math.max(22, bin.stockLength / maxStock * 100)}%`; track.title = `${formatNumber(bin.used)} mm consumidos de ${formatNumber(bin.stockLength)} mm`;
+        const stockLabel = t(bin.stockType.labelKey || (bin.stockType.priority ? 'preferredBar' : 'availableBar'));
+        const label = document.createElement('div'); label.className = 'bar-label'; label.innerHTML = `${escapeHtml(t('barUpper', { number:index + 1 }))}<small>${escapeHtml(stockLabel)} · ${formatNumber(bin.stockLength)} mm</small>`;
+        const track = document.createElement('div'); track.className = 'bar-track'; track.style.width = `${Math.max(22, bin.stockLength / maxStock * 100)}%`; track.title = t('consumedOf', { used:formatNumber(bin.used), total:formatNumber(bin.stockLength) });
         bin.items.forEach((item, itemIndex) => {
           const piece = document.createElement('div'); piece.className = 'bar-piece'; piece.style.width = `${item.length / bin.stockLength * 100}%`; piece.style.background = palette[(profileIndex * 3 + item.colorIndex) % palette.length]; piece.textContent = item.length / bin.stockLength > .055 ? `${item.id} · ${formatNumber(item.length)}` : formatNumber(item.length); piece.title = `${item.id} — ${formatNumber(item.length)} mm`; track.appendChild(piece);
-          if (itemIndex < bin.items.length - 1 && result.config.kerf > 0) { const kerf = document.createElement('span'); kerf.className = 'bar-kerf'; kerf.style.width = `${Math.max(.12, result.config.kerf / bin.stockLength * 100)}%`; kerf.title = `Corte: ${formatNumber(result.config.kerf)} mm`; track.appendChild(kerf); }
+          if (itemIndex < bin.items.length - 1 && result.config.kerf > 0) { const kerf = document.createElement('span'); kerf.className = 'bar-kerf'; kerf.style.width = `${Math.max(.12, result.config.kerf / bin.stockLength * 100)}%`; kerf.title = t('cutThickness', { value:formatNumber(result.config.kerf) }); track.appendChild(kerf); }
         });
-        const waste = document.createElement('div'); waste.className = 'bar-waste-label'; waste.innerHTML = `Sobra<br><strong>${formatNumber(bin.waste)} mm</strong>`; row.append(label, track, waste); ui.barsVisual.appendChild(row);
+        const waste = document.createElement('div'); waste.className = 'bar-waste-label'; waste.innerHTML = `${escapeHtml(t('waste'))}<br><strong>${formatNumber(bin.waste)} mm</strong>`; row.append(label, track, waste); ui.barsVisual.appendChild(row);
       });
     });
     ui.patternsBody.innerHTML = '';
     projectResult.profileResults.forEach(result => groupedPatterns(result).forEach((group, patternIndex) => {
       const bin = group.example, row = document.createElement('tr'), sequence = bin.items.map(item => `<span class="cut-chip">${escapeHtml(item.id)} · ${formatNumber(item.length)} mm</span>`).join('');
-      row.innerHTML = `<td><strong>${escapeHtml(result.config.name)}</strong><br><small>${escapeHtml(profileDescription(result.config))}</small></td><td><span class="pattern-code">PC-${String(patternIndex + 1).padStart(2, '0')}</span><br><small>Barras ${group.bins.join(', ')}</small></td><td>${escapeHtml(bin.stockType.label)}<br><strong>${formatNumber(bin.stockLength)} mm</strong></td><td><strong>${group.bins.length}</strong></td><td class="cut-sequence">${sequence}</td><td>${formatNumber(bin.used)} mm</td><td>${formatNumber(bin.waste)} mm</td><td>${formatNumber(bin.utilization, 1)}%</td>`; ui.patternsBody.appendChild(row);
+      row.innerHTML = `<td><strong>${escapeHtml(result.config.name)}</strong><br><small>${escapeHtml(profileDescription(result.config))}</small></td><td><span class="pattern-code">PC-${String(patternIndex + 1).padStart(2, '0')}</span><br><small>${escapeHtml(t('barNumbers', { numbers:group.bins.join(', ') }))}</small></td><td>${escapeHtml(t(bin.stockType.labelKey || (bin.stockType.priority ? 'preferredBar' : 'availableBar')))}<br><strong>${formatNumber(bin.stockLength)} mm</strong></td><td><strong>${group.bins.length}</strong></td><td class="cut-sequence">${sequence}</td><td>${formatNumber(bin.used)} mm</td><td>${formatNumber(bin.waste)} mm</td><td>${formatNumber(bin.utilization, 1)}%</td>`; ui.patternsBody.appendChild(row);
     }));
   }
 
-  function workbookAvailable() { if (window.XLSX) return true; setMessage('O módulo de Excel não foi carregado. Recarregue a página e tente novamente.', 'error'); return false; }
+  function workbookAvailable() { if (window.XLSX) return true; setMessage(t('excelMissing'), 'error'); return false; }
   const projectSheetHeaders = {
     profiles: ['Perfil','Material','Tipo_secao','Diametro_mm','Lado_mm','Largura_mm','Altura_mm','Aba_A_mm','Aba_B_mm','Espessura_mm','Descricao_secao'],
     stocks: ['Perfil','Comprimento_barra_mm','Quantidade','Priorizar'],
@@ -368,7 +411,8 @@
   }
   function profileSheetRow(profile) {
     const d = profile.dimensions || {};
-    return [profile.name, profile.material, sectionDefinitions[profile.type]?.label || 'Outro perfil', d.diameter ?? '', d.side ?? '', d.width ?? '', d.height ?? '', d.legA ?? '', d.legB ?? '', d.thickness ?? '', d.description ?? ''];
+    const canonicalLabels = { roundTube:'Tubo redondo', squareTube:'Tubo quadrado', rectTube:'Tubo retangular', roundBar:'Barra redonda', flatBar:'Barra chata', angle:'Cantoneira', custom:'Outro perfil' };
+    return [profile.name, profile.material, canonicalLabels[profile.type] || 'Outro perfil', d.diameter ?? '', d.side ?? '', d.width ?? '', d.height ?? '', d.legA ?? '', d.legB ?? '', d.thickness ?? '', d.description ?? ''];
   }
   function downloadTemplate() {
     if (!workbookAvailable()) return;
@@ -382,15 +426,15 @@
       ['Perfil 7','Aço carbono','Outro perfil','','','','','','','','Descrição livre da seção']
     ];
     const workbook = buildProjectWorkbook(profileRows, [['Perfil 1',6000,2,'Não'],['Perfil 1',4000,1,'Sim'],['Perfil 3',6000,4,'Não']], [['Perfil 1','P01',1200,4,'Exemplo — substitua esta linha'],['Perfil 3','P02',850,6,'Exemplo — substitua esta linha']], [['Versao_modelo',2],['Nome_projeto','Novo projeto'],['Espessura_corte_mm',3],['Unidade','mm']]);
-    XLSX.writeFile(workbook, 'modelo_completo_pipesaver.xlsx'); setMessage('Modelo completo baixado.', 'success');
+    XLSX.writeFile(workbook, 'modelo_completo_pipesaver.xlsx'); setMessage(t('templateDownloaded'), 'success');
   }
   function saveProjectExcel() {
     if (!workbookAvailable()) return;
     serializeActiveProfile();
     const profileName = new Map(state.profiles.map(profile => [profile.id, profile.name || 'Perfil sem nome']));
     const profileRows = state.profiles.map(profileSheetRow), stockRows = state.stocks.map(stock => [profileName.get(stock.profileId) || '', stock.length, stock.quantity, stock.priority ? 'Sim' : 'Não']), cutRows = state.cuts.map(cut => [profileName.get(cut.profileId) || '', cut.id, cut.length, cut.quantity, cut.observation || '']);
-    const workbook = buildProjectWorkbook(profileRows, stockRows, cutRows, [['Versao_modelo',2],['Nome_projeto',ui.projectName.value],['Espessura_corte_mm',ui.kerf.value],['Unidade','mm'],['Salvo_em',new Date().toLocaleString('pt-BR')]]);
-    XLSX.writeFile(workbook, `${safeFileName(ui.projectName.value)}_projeto_pipesaver.xlsx`); setMessage('Projeto preenchido salvo. Importe este arquivo para continuar depois.', 'success');
+    const workbook = buildProjectWorkbook(profileRows, stockRows, cutRows, [['Versao_modelo',2],['Nome_projeto',ui.projectName.value],['Espessura_corte_mm',ui.kerf.value],['Unidade','mm'],['Salvo_em',new Date().toLocaleString(state.language)]]);
+    XLSX.writeFile(workbook, `${safeFileName(ui.projectName.value)}_projeto_pipesaver.xlsx`); setMessage(t('projectSaved'), 'success');
   }
   function findHeader(headers, aliases) { return headers.find(header => aliases.includes(normalizeHeader(header))); }
   function sectionTypeFrom(value) {
@@ -455,13 +499,13 @@
         serializeActiveProfile(); const profile = activeProfile(); state.cuts = state.cuts.filter(cut => cut.profileId !== profile.id);
         cutRows.forEach((row, index) => { const length = numberFrom(row[lengthHeader]), quantity = Math.trunc(numberFrom(row[quantityHeader])); if (!(length > 0) || !(quantity >= 1)) throw new Error(`Dados inválidos na linha ${index + 2}.`); state.cuts.push({ rowId:`cut-${state.nextCutId++}`, profileId:profile.id, id:String(idHeader ? row[idHeader] : '').trim() || `P${index + 1}`, length, quantity, observation:String(observationHeader ? row[observationHeader] : '').trim() }); });
       }
-      renderActiveProfile(); renderRelationRows(); invalidateResult(); setMessage(`${cutRows.length} medida(s) e ${importedProfiles ? importedProfiles.length : 1} perfil(is) importado(s) de “${file.name}”.`, 'success');
+      renderActiveProfile(); renderRelationRows(); invalidateResult(); setMessage(t('imported', { cuts:cutRows.length, profiles:importedProfiles ? importedProfiles.length : 1, file:file.name }), 'success');
     } catch (error) { setMessage(error.message, 'error'); }
     finally { ui.excelInput.value = ''; }
   }
   function exportResult() {
     if (!state.result || !workbookAvailable()) return;
-    const project = state.result, summaryData = [['PIPESAVER — PROJETO COMPLETO'],['Projeto',project.config.projectName],['Perfis',project.profileResults.length],['Barras utilizadas',project.totalBars],['Peças',project.totalPieces],['Aproveitamento (%)',Number(project.utilization.toFixed(2))],['Perda de corte (mm)',Number(project.totalKerfLoss.toFixed(2))],['Sobra total (mm)',Number(project.totalWaste.toFixed(2))],['Gerado em',project.createdAt.toLocaleString('pt-BR')]], stockData = [['Perfil','Material','Seção','Comprimento_barra_mm','Quantidade_disponivel','Priorizar','Quantidade_utilizada']], planData = [['Perfil','Barra','Padrão','Comprimento_barra_mm','Prioritária','Ordem','Identificação','Comprimento_mm','Kerf_apos_mm','Usado_barra_mm','Sobra_barra_mm']], demandData = [['Perfil','Identificacao','Comprimento_mm','Quantidade','Observacao']];
+    const project = state.result, summaryData = [['PIPESAVER — PROJETO COMPLETO'],['Projeto',project.config.projectName],['Perfis',project.profileResults.length],['Barras utilizadas',project.totalBars],['Peças',project.totalPieces],['Aproveitamento (%)',Number(project.utilization.toFixed(2))],['Perda de corte (mm)',Number(project.totalKerfLoss.toFixed(2))],['Sobra total (mm)',Number(project.totalWaste.toFixed(2))],['Gerado em',project.createdAt.toLocaleString(state.language)]], stockData = [['Perfil','Material','Seção','Comprimento_barra_mm','Quantidade_disponivel','Priorizar','Quantidade_utilizada']], planData = [['Perfil','Barra','Padrão','Comprimento_barra_mm','Prioritária','Ordem','Identificação','Comprimento_mm','Kerf_apos_mm','Usado_barra_mm','Sobra_barra_mm']], demandData = [['Perfil','Identificacao','Comprimento_mm','Quantidade','Observacao']];
     project.profileResults.forEach(result => {
       const usage = new Map(); result.bins.forEach(bin => usage.set(bin.stockType.id,(usage.get(bin.stockType.id)||0)+1));
       result.config.stockTypes.forEach(stock => stockData.push([result.config.name,result.config.material,profileDescription(result.config),stock.length,stock.quantity,stock.priority?'Sim':'Não',usage.get(stock.id)||0]));
@@ -469,21 +513,36 @@
       result.bins.forEach((bin,barIndex) => bin.items.forEach((item,itemIndex) => planData.push([result.config.name,barIndex+1,patternMap.get(barIndex+1),bin.stockLength,bin.stockType.priority?'Sim':'Não',itemIndex+1,item.id,item.length,itemIndex<bin.items.length-1?result.config.kerf:0,Number(bin.used.toFixed(3)),Number(bin.waste.toFixed(3))])));
       result.config.cuts.forEach(cut => demandData.push([result.config.name,cut.id,cut.length,cut.quantity,cut.observation||'']));
     });
-    const workbook = XLSX.utils.book_new(); [['Resumo',summaryData],['Estoque',stockData],['Plano_de_corte',planData],['Demanda',demandData]].forEach(([name,data]) => XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet(data),name)); XLSX.writeFile(workbook,`${safeFileName(project.config.projectName)}_pipesaver.xlsx`); setMessage('Projeto completo exportado para Excel.','success');
+    const workbook = XLSX.utils.book_new(); [['Resumo',summaryData],['Estoque',stockData],['Plano_de_corte',planData],['Demanda',demandData]].forEach(([name,data]) => XLSX.utils.book_append_sheet(workbook,XLSX.utils.aoa_to_sheet(data),name)); XLSX.writeFile(workbook,`${safeFileName(project.config.projectName)}_pipesaver.xlsx`); setMessage(t('projectExported'),'success');
   }
   async function executeOptimization() {
-    try { const config = readProjectConfig(); ui.optimizeButton.disabled = true; ui.optimizeButton.firstElementChild.textContent = 'Otimizando projeto…'; setMessage('Calculando todos os perfis e barras…'); await new Promise(resolve => setTimeout(resolve,30)); const started = performance.now(), result = optimizeProject(config); result.elapsedMs = performance.now()-started; renderResult(result); setMessage(`Projeto concluído em ${formatNumber(result.elapsedMs,0)} ms.`,'success'); }
+    try { const config = readProjectConfig(); ui.optimizeButton.disabled = true; ui.optimizeButton.firstElementChild.textContent = t('optimizing'); setMessage(t('calculations')); await new Promise(resolve => setTimeout(resolve,30)); const started = performance.now(), result = optimizeProject(config); result.elapsedMs = performance.now()-started; renderResult(result); setMessage(t('completedIn', { time:formatNumber(result.elapsedMs,0) }),'success'); }
     catch (error) { setMessage(error.message,'error'); }
-    finally { ui.optimizeButton.disabled = false; ui.optimizeButton.firstElementChild.textContent = 'Gerar plano de corte'; }
+    finally { ui.optimizeButton.disabled = false; ui.optimizeButton.firstElementChild.textContent = t('generatePlan'); }
   }
 
-  ui.addProfileButton.addEventListener('click', () => { serializeActiveProfile(); const profile = makeProfile(`Perfil ${state.profiles.length + 1}`); state.profiles.push(profile); state.activeProfileId = profile.id; renderActiveProfile(); invalidateResult(); ui.profileName.focus(); });
+  ui.addProfileButton.addEventListener('click', () => { serializeActiveProfile(); const profile = makeProfile(t('profileDefault', { number:state.profiles.length + 1 })); state.profiles.push(profile); state.activeProfileId = profile.id; renderActiveProfile(); invalidateResult(); ui.profileName.focus(); });
   ui.profileName.addEventListener('input', () => { const profile=activeProfile(); if(profile){profile.name=ui.profileName.value; updateProfileOptions();} invalidateResult(); });
   ui.sectionType.addEventListener('change', () => { const profile=activeProfile(); if(!profile)return; profile.type=ui.sectionType.value; profile.dimensions=defaultDimensions(profile.type); renderDimensionFields(profile); invalidateResult(); });
   [ui.projectName,ui.material,ui.kerf].forEach(input => input.addEventListener('change',invalidateResult));
   ui.addStockButton.addEventListener('click', () => addStockRow({profileId:state.activeProfileId,length:6000,quantity:1},true)); ui.addCutButton.addEventListener('click', () => addCutRow({profileId:state.activeProfileId},true));
   ui.templateButton.addEventListener('click',downloadTemplate); ui.saveProjectButton.addEventListener('click',saveProjectExcel); ui.excelInput.addEventListener('change',event => event.target.files[0]&&importExcel(event.target.files[0])); ui.optimizeButton.addEventListener('click',executeOptimization); ui.exportButton.addEventListener('click',exportResult); ui.printButton.addEventListener('click',()=>window.print());
 
-  const firstProfile = makeProfile('Perfil 1'); state.profiles.push(firstProfile); state.activeProfileId = firstProfile.id; state.stocks.push({id:`stock-${state.nextStockId++}`,profileId:firstProfile.id,length:6000,quantity:1}); state.cuts.push({rowId:`cut-${state.nextCutId++}`,profileId:firstProfile.id,id:'',length:'',quantity:1}); renderActiveProfile(); renderRelationRows();
-  window.PipeSaverCore = Object.freeze({ optimizeCuttingList, optimizeProject, groupedPatterns, profileDescription, numberFrom });
+  ui.languageSelect.addEventListener('change', event => applyLanguage(event.target.value));
+  ui.languageButton.addEventListener('click', () => setLanguageMenu(ui.languageMenu.hidden));
+  ui.languageMenu.addEventListener('click', event => {
+    const option = event.target.closest('[data-language]'); if (!option) return;
+    applyLanguage(option.dataset.language); setLanguageMenu(false); ui.languageButton.focus();
+  });
+  ui.languagePicker.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { setLanguageMenu(false); ui.languageButton.focus(); return; }
+    if (!['ArrowDown','ArrowUp'].includes(event.key)) return;
+    event.preventDefault(); setLanguageMenu(true);
+    const options = [...ui.languageMenu.querySelectorAll('[data-language]')], current = Math.max(0, options.indexOf(document.activeElement));
+    options[(current + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length].focus();
+  });
+  document.addEventListener('click', event => { if (!ui.languagePicker.contains(event.target)) setLanguageMenu(false); });
+
+  const firstProfile = makeProfile(t('profileDefault', { number:1 })); state.profiles.push(firstProfile); state.activeProfileId = firstProfile.id; state.stocks.push({id:`stock-${state.nextStockId++}`,profileId:firstProfile.id,length:6000,quantity:1}); state.cuts.push({rowId:`cut-${state.nextCutId++}`,profileId:firstProfile.id,id:'',length:'',quantity:1}); renderActiveProfile(); renderRelationRows(); applyLanguage(state.language, false);
+  window.PipeSaverCore = Object.freeze({ optimizeCuttingList, optimizeProject, groupedPatterns, profileDescription, numberFrom, applyLanguage });
 })();

@@ -13,39 +13,63 @@
       <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
       <span class="brand-name"><strong>Pipe</strong><b>Saver</b></span>
     </a>
-    <div class="top-status"><span></span>Processamento local e seguro</div>
+    <div class="topbar-actions">
+      <div class="top-status"><span></span><b data-i18n="localProcessing">Processamento local e seguro</b></div>
+      <div id="languagePicker" class="language-picker">
+        <button id="languageButton" class="language-trigger" type="button" aria-haspopup="listbox" aria-expanded="false" aria-label="Idioma: Português">
+          <img id="currentFlag" src="flags/br.svg" alt=""><span id="currentLanguage">Português</span><i aria-hidden="true"></i>
+        </button>
+        <div id="languageMenu" class="language-menu" role="listbox" aria-label="Idioma" hidden>
+          <button type="button" role="option" data-language="pt-BR"><img src="flags/br.svg" alt="">Português</button>
+          <button type="button" role="option" data-language="en-US"><img src="flags/us.svg" alt="">English</button>
+          <button type="button" role="option" data-language="es-ES"><img src="flags/es.svg" alt="">Español</button>
+          <button type="button" role="option" data-language="zh-CN"><img src="flags/cn.svg" alt="">中文</button>
+          <button type="button" role="option" data-language="hi-IN"><img src="flags/in.svg" alt="">हिन्दी</button>
+          <button type="button" role="option" data-language="ar-SA"><img src="flags/sa.svg" alt="">العربية</button>
+          <button type="button" role="option" data-language="fr-FR"><img src="flags/fr.svg" alt="">Français</button>
+          <button type="button" role="option" data-language="bn-BD"><img src="flags/bd.svg" alt="">বাংলা</button>
+          <button type="button" role="option" data-language="ru-RU"><img src="flags/ru.svg" alt="">Русский</button>
+          <button type="button" role="option" data-language="de-DE"><img src="flags/de.svg" alt="">Deutsch</button>
+          <button type="button" role="option" data-language="it-IT"><img src="flags/it.svg" alt="">Italiano</button>
+          <button type="button" role="option" data-language="ja-JP"><img src="flags/jp.svg" alt="">日本語</button>
+        </div>
+        <select id="languageSelect" class="language-native-select" aria-label="Idioma" tabindex="-1">
+          <option value="pt-BR">Português</option><option value="en-US">English</option><option value="es-ES">Español</option><option value="zh-CN">中文</option><option value="hi-IN">हिन्दी</option><option value="ar-SA">العربية</option><option value="fr-FR">Français</option><option value="bn-BD">বাংলা</option><option value="ru-RU">Русский</option><option value="de-DE">Deutsch</option><option value="it-IT">Italiano</option><option value="ja-JP">日本語</option>
+        </select>
+      </div>
+    </div>
   </header>
 
   <main class="app-shell">
     <aside class="sidebar">
       <section class="panel project-file-panel">
-        <div class="project-file-heading"><div><h2>Arquivo do projeto</h2><p>Comece por uma planilha ou salve para continuar depois</p></div></div>
+        <div class="project-file-heading"><div><h2 data-i18n="projectFile">Arquivo do projeto</h2><p data-i18n="projectFileHelp">Comece por uma planilha ou salve para continuar depois</p></div></div>
         <div class="import-actions">
-          <button id="templateButton" class="ghost-button" type="button"><span aria-hidden="true">⇩</span> Baixar modelo</button>
-          <label class="ghost-button import-button"><span aria-hidden="true">⇧</span> Importar Excel<input id="excelInput" type="file" accept=".xlsx,.xls,.csv" hidden></label>
-          <button id="saveProjectButton" class="ghost-button save-project-button" type="button"><span aria-hidden="true">▣</span> Salvar projeto preenchido</button>
+          <button id="templateButton" class="ghost-button" type="button"><span aria-hidden="true">⇩</span><b data-i18n="downloadTemplate">Baixar modelo</b></button>
+          <label class="ghost-button import-button"><span aria-hidden="true">⇧</span><b data-i18n="importExcel">Importar Excel</b><input id="excelInput" type="file" accept=".xlsx,.xls,.csv" hidden></label>
+          <button id="saveProjectButton" class="ghost-button save-project-button" type="button"><span aria-hidden="true">▣</span><b data-i18n="saveProject">Salvar projeto preenchido</b></button>
         </div>
       </section>
 
       <section class="panel">
-        <div class="section-heading"><span>1</span><div><h2>Perfis do projeto</h2><p>Adicione todas as seções deste estudo</p></div></div>
-        <label class="field full"><span>Nome do projeto</span><input id="projectName" value="Nova lista de corte" maxlength="80"></label>
+        <div class="section-heading"><span>1</span><div><h2 data-i18n="projectProfiles">Perfis do projeto</h2><p data-i18n="projectProfilesHelp">Adicione todas as seções deste estudo</p></div></div>
+        <label class="field full"><span data-i18n="projectName">Nome do projeto</span><input id="projectName" value="Nova lista de corte" maxlength="80"></label>
         <div class="profile-switcher">
-          <div class="profile-list-heading"><span>Perfis cadastrados</span><button id="addProfileButton" type="button"><b>+</b> Adicionar perfil</button></div>
+          <div class="profile-list-heading"><span data-i18n="registeredProfiles">Perfis cadastrados</span><button id="addProfileButton" type="button"><b>+</b><span data-i18n="addProfile">Adicionar perfil</span></button></div>
           <div id="profileList" class="profile-list" role="listbox" aria-label="Perfis cadastrados"></div>
         </div>
-        <label class="field full profile-name-field"><span>Identificação do perfil</span><input id="profileName" value="Perfil 1" maxlength="60" placeholder="Ex.: Tubo principal Ø60 × 3"></label>
+        <label class="field full profile-name-field"><span data-i18n="profileIdentification">Identificação do perfil</span><input id="profileName" value="Perfil 1" maxlength="60" placeholder="Ex.: Tubo principal Ø60 × 3" data-i18n-placeholder="profilePlaceholder"></label>
         <div class="field-grid two">
-          <label class="field"><span>Material</span><input id="material" value="Aço carbono" maxlength="50"></label>
-          <label class="field"><span>Tipo de seção</span>
+          <label class="field"><span data-i18n="material">Material</span><input id="material" value="Aço carbono" maxlength="50"></label>
+          <label class="field"><span data-i18n="sectionType">Tipo de seção</span>
             <select id="sectionType">
-              <option value="roundTube">Tubo redondo</option>
-              <option value="squareTube">Tubo quadrado</option>
-              <option value="rectTube" selected>Tubo retangular</option>
-              <option value="roundBar">Barra redonda</option>
-              <option value="flatBar">Barra chata</option>
-              <option value="angle">Cantoneira</option>
-              <option value="custom">Outro perfil</option>
+              <option value="roundTube" data-i18n="roundTube">Tubo redondo</option>
+              <option value="squareTube" data-i18n="squareTube">Tubo quadrado</option>
+              <option value="rectTube" selected data-i18n="rectTube">Tubo retangular</option>
+              <option value="roundBar" data-i18n="roundBar">Barra redonda</option>
+              <option value="flatBar" data-i18n="flatBar">Barra chata</option>
+              <option value="angle" data-i18n="angle">Cantoneira</option>
+              <option value="custom" data-i18n="customProfile">Outro perfil</option>
             </select>
           </label>
         </div>
@@ -53,56 +77,56 @@
       </section>
 
       <section class="panel">
-        <div class="section-heading"><span>2</span><div><h2>Barras disponíveis</h2><p>Informe o estoque de cada perfil</p></div></div>
-        <div class="stock-heading"><strong>Lista de barras</strong><small>Valores em milímetros</small></div>
-        <div class="stock-columns"><span>Perfil</span><span>Comprimento</span><span>Qtd.</span><span>Priorizar</span><span></span></div>
+        <div class="section-heading"><span>2</span><div><h2 data-i18n="availableBars">Barras disponíveis</h2><p data-i18n="availableBarsHelp">Informe o estoque de cada perfil</p></div></div>
+        <div class="stock-heading"><strong data-i18n="barList">Lista de barras</strong><small data-i18n="valuesMm">Valores em milímetros</small></div>
+        <div class="stock-columns"><span data-i18n="profile">Perfil</span><span data-i18n="length">Comprimento</span><span data-i18n="qty">Qtd.</span><span data-i18n="prioritize">Priorizar</span><span></span></div>
         <div id="stockBody" class="stock-list"></div>
-        <button id="addStockButton" class="add-row-button stock-add-button" type="button"><span>+</span> Adicionar barra</button>
+        <button id="addStockButton" class="add-row-button stock-add-button" type="button"><span>+</span><b data-i18n="addBar">Adicionar barra</b></button>
         <div class="tool-field">
-          <label class="field"><span>Espessura de corte</span><input id="kerf" type="number" value="3" min="0" step="0.1"></label>
+          <label class="field"><span data-i18n="kerf">Espessura de corte</span><input id="kerf" type="number" value="3" min="0" step="0.1"></label>
         </div>
-        <p class="field-help">Cadastre cada comprimento disponível e sua quantidade. A espessura de corte considera os cortes entre peças e o corte final que separa a sobra.</p>
+        <p class="field-help" data-i18n="barHelp">Cadastre cada comprimento disponível e sua quantidade. A espessura de corte considera os cortes entre peças e o corte final que separa a sobra.</p>
       </section>
 
       <section class="panel cuts-panel">
-        <div class="section-heading"><span>3</span><div><h2>Peças desejadas</h2><p>Relacione cada medida ao perfil correto</p></div></div>
-        <div class="cut-columns"><span>Perfil</span><span>Identificação</span><span>Comprimento</span><span>Qtd.</span><span></span></div>
+        <div class="section-heading"><span>3</span><div><h2 data-i18n="desiredPieces">Peças desejadas</h2><p data-i18n="desiredPiecesHelp">Relacione cada medida ao perfil correto</p></div></div>
+        <div class="cut-columns"><span data-i18n="profile">Perfil</span><span data-i18n="identification">Identificação</span><span data-i18n="length">Comprimento</span><span data-i18n="qty">Qtd.</span><span></span></div>
         <div id="cutsBody" class="cuts-list"></div>
-        <button id="addCutButton" class="add-row-button" type="button"><span>+</span> Adicionar medida</button>
+        <button id="addCutButton" class="add-row-button" type="button"><span>+</span><b data-i18n="addMeasure">Adicionar medida</b></button>
       </section>
 
-      <button id="optimizeButton" class="primary-button" type="button"><span>Gerar plano de corte</span><span>→</span></button>
+      <button id="optimizeButton" class="primary-button" type="button"><span data-i18n="generatePlan">Gerar plano de corte</span><span>→</span></button>
       <div id="message" class="message" role="status" aria-live="polite"></div>
     </aside>
 
     <section class="workspace">
       <div class="workspace-toolbar">
-        <div><h1>Plano de corte</h1><p id="resultSubtitle">Configure o material e adicione as peças</p></div>
+        <div><h1 data-i18n="cuttingPlan">Plano de corte</h1><p id="resultSubtitle" data-i18n="configureMaterial">Configure o material e adicione as peças</p></div>
         <div class="toolbar-actions">
-          <button id="printButton" class="secondary-button" disabled>Imprimir</button>
-          <button id="exportButton" class="export-button" disabled>Exportar Excel</button>
+          <button id="printButton" class="secondary-button" disabled data-i18n="print">Imprimir</button>
+          <button id="exportButton" class="export-button" disabled data-i18n="exportExcel">Exportar Excel</button>
         </div>
       </div>
 
       <section class="result-area">
         <div id="resultContent" hidden>
           <div class="metrics">
-            <article><span class="metric-icon bars">▤</span><div><small>Barras utilizadas</small><strong id="metricBars">—</strong></div></article>
-            <article><span class="metric-icon usage">◔</span><div><small>Aproveitamento</small><strong id="metricUsage">—</strong></div></article>
-            <article><span class="metric-icon pieces">◇</span><div><small>Peças</small><strong id="metricPieces">—</strong></div></article>
-            <article><span class="metric-icon waste">↘</span><div><small>Sobra total</small><strong id="metricWaste">—</strong></div></article>
+            <article><span class="metric-icon bars">▤</span><div><small data-i18n="barsUsed">Barras utilizadas</small><strong id="metricBars">—</strong></div></article>
+            <article><span class="metric-icon usage">◔</span><div><small data-i18n="utilization">Aproveitamento</small><strong id="metricUsage">—</strong></div></article>
+            <article><span class="metric-icon pieces">◇</span><div><small data-i18n="pieces">Peças</small><strong id="metricPieces">—</strong></div></article>
+            <article><span class="metric-icon waste">↘</span><div><small data-i18n="totalWaste">Sobra total</small><strong id="metricWaste">—</strong></div></article>
           </div>
 
           <div class="result-card visual-card">
-            <div class="card-heading"><div><h2>Mapa das barras</h2><p>Cada cor representa uma medida da lista</p></div><span id="profileBadge" class="profile-badge"></span></div>
+            <div class="card-heading"><div><h2 data-i18n="barMap">Mapa das barras</h2><p data-i18n="barMapHelp">Cada cor representa uma medida da lista</p></div><span id="profileBadge" class="profile-badge"></span></div>
             <div id="barsVisual" class="bars-visual"></div>
           </div>
 
           <div class="result-card">
-            <div class="card-heading"><div><h2>Lista de corte</h2><p>Padrões iguais são agrupados para facilitar a produção</p></div></div>
+            <div class="card-heading"><div><h2 data-i18n="cutList">Lista de corte</h2><p data-i18n="cutListHelp">Padrões iguais são agrupados para facilitar a produção</p></div></div>
             <div class="result-table-wrap">
               <table class="result-table">
-                <thead><tr><th>Perfil</th><th>Padrão</th><th>Barra utilizada</th><th>Qtd.</th><th>Sequência de cortes</th><th>Usado</th><th>Sobra/barra</th><th>Aproveitamento</th></tr></thead>
+                <thead><tr><th data-i18n="profile">Perfil</th><th data-i18n="pattern">Padrão</th><th data-i18n="barUsed">Barra utilizada</th><th data-i18n="qty">Qtd.</th><th data-i18n="cutSequence">Sequência de cortes</th><th data-i18n="used">Usado</th><th data-i18n="wastePerBar">Sobra/barra</th><th data-i18n="utilization">Aproveitamento</th></tr></thead>
                 <tbody id="patternsBody"></tbody>
               </table>
             </div>
@@ -112,8 +136,9 @@
     </section>
   </main>
 
-  <footer><span>PipeSaver v1.0</span><span>Otimização 1D · Seus dados não saem deste dispositivo</span><a href="THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener">Licenças</a></footer>
+  <footer><span>PipeSaver v1.0</span><span data-i18n="footerPrivacy">Otimização 1D · Seus dados não saem deste dispositivo</span><a href="THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener" data-i18n="licenses">Licenças</a></footer>
   <script src="vendor/xlsx.full.min.js"></script>
+  <script src="i18n.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
