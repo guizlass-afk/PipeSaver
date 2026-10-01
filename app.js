@@ -58,7 +58,8 @@
   function fromMM(value) { return convertUnit(value, 'mm', displayUnit); }
   function lengthDigits() { return displayUnit === 'in' ? 3 : 1; }
   function formatPlain(value) { if (!Number.isFinite(value)) return ''; const digits = displayUnit === 'in' ? 3 : 2; return String(Math.round(value * 10 ** digits) / 10 ** digits); }
-  function formatLength(mm, digits) { return `${formatNumber(fromMM(Number(mm)), digits ?? lengthDigits())} ${displayUnit}`; }
+  function formatLengthValue(mm, digits) { return formatNumber(fromMM(Number(mm)), digits ?? lengthDigits()); }
+  function formatLength(mm, digits) { return `${formatLengthValue(mm, digits)} ${displayUnit}`; }
   function booleanFrom(value) { return ['1', 'true', 'sim', 'yes', 'x', 'priorizar', 'prioritario', 'prioritaria'].includes(normalizeHeader(value)); }
   function normalizeHeader(value) { return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }
   function safeFileName(value) { return String(value || 'pipesaver').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60) || 'pipesaver'; }
@@ -202,12 +203,12 @@
   function profileDescription(profile) {
     const d = profile.dimensions;
     switch (profile.type) {
-      case 'roundTube': return `Ø ${formatLength(d.diameter)} × ${formatLength(d.thickness)}`;
-      case 'squareTube': return `${formatLength(d.side)} × ${formatLength(d.side)} × ${formatLength(d.thickness)}`;
-      case 'rectTube': return `${formatLength(d.width)} × ${formatLength(d.height)} × ${formatLength(d.thickness)}`;
+      case 'roundTube': return `Ø ${formatLengthValue(d.diameter)} × ${formatLengthValue(d.thickness)} ${displayUnit}`;
+      case 'squareTube': return `${formatLengthValue(d.side)} × ${formatLengthValue(d.side)} × ${formatLengthValue(d.thickness)} ${displayUnit}`;
+      case 'rectTube': return `${formatLengthValue(d.width)} × ${formatLengthValue(d.height)} × ${formatLengthValue(d.thickness)} ${displayUnit}`;
       case 'roundBar': return `Ø ${formatLength(d.diameter)}`;
-      case 'flatBar': return `${formatLength(d.width)} × ${formatLength(d.thickness)}`;
-      case 'angle': return `${formatLength(d.legA)} × ${formatLength(d.legB)} × ${formatLength(d.thickness)}`;
+      case 'flatBar': return `${formatLengthValue(d.width)} × ${formatLengthValue(d.thickness)} ${displayUnit}`;
+      case 'angle': return `${formatLengthValue(d.legA)} × ${formatLengthValue(d.legB)} × ${formatLengthValue(d.thickness)} ${displayUnit}`;
       default: return String(d.description || t('customDescription'));
     }
   }
