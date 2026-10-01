@@ -167,7 +167,27 @@
         const roundTripCuts = win.XLSX.utils.sheet_to_json(downloadedWorkbook.Sheets.Cortes, {defval:''});
         if (roundTripCuts[0].Observacao !== 'Corte principal' || roundTripCuts[1].Observacao !== 'Separar por lote') throw new Error('Observações não foram preservadas ao reabrir e salvar o projeto');
         win.XLSX.writeFile = originalWriteFile;
-        log.push('Interface multi-perfil: OK', 'Idiomas e bandeiras: OK (12 opções)', 'Modelo Excel completo: OK', 'Salvar e retomar projeto: OK', 'Importação XLSX simples: OK', 'Importação de projeto completo: OK', 'Biblioteca local: OK');
+
+        if (doc.documentElement.dataset.unit !== 'mm') throw new Error('Unidade padrão não é mm');
+        if (Math.abs(core.convertUnit(25.4, 'mm', 'in') - 1) > 1e-9 || Math.abs(core.convertUnit(1, 'in', 'mm') - 25.4) > 1e-9) throw new Error('Conversão mm/in incorreta');
+        const unitToggle = doc.getElementById('unitToggle');
+        if (!unitToggle) throw new Error('Alternador de unidade não encontrado');
+        const kerfMm = Number(doc.getElementById('kerf').value);
+        const dimensionInputsMm = [...doc.querySelectorAll('#dimensionFields input')].map(el => Number(el.value));
+        unitToggle.click();
+        if (doc.documentElement.dataset.unit !== 'in') throw new Error('Alternância para polegadas falhou');
+        if (win.localStorage.getItem('pipesaver-unit') !== 'in') throw new Error('Preferência de unidade não foi persistida');
+        if (!doc.querySelector('#dimensionFields span').textContent.includes('(in)')) throw new Error('Rótulo das dimensões não indicou polegadas');
+        const kerfIn = Number(doc.getElementById('kerf').value);
+        if (Math.abs(kerfIn - kerfMm / 25.4) > 0.01) throw new Error('Espessura de corte não converteu para polegadas');
+        const dimensionInputsIn = [...doc.querySelectorAll('#dimensionFields input')].map(el => Number(el.value));
+        if (dimensionInputsIn.some((value, index) => Math.abs(value - dimensionInputsMm[index] / 25.4) > 0.01)) throw new Error('Dimensões do perfil não converteram para polegadas');
+        unitToggle.click();
+        if (doc.documentElement.dataset.unit !== 'mm' || win.localStorage.getItem('pipesaver-unit') !== 'mm') throw new Error('Alternância de volta para milímetros falhou');
+        if (Math.abs(Number(doc.getElementById('kerf').value) - kerfMm) > 0.05) throw new Error('Ida e volta mm→in→mm perdeu precisão da espessura de corte');
+        const dimensionInputsRoundTrip = [...doc.querySelectorAll('#dimensionFields input')].map(el => Number(el.value));
+        if (dimensionInputsRoundTrip.some((value, index) => Math.abs(value - dimensionInputsMm[index]) > 0.05)) throw new Error('Ida e volta mm→in→mm perdeu precisão das dimensões');
+        log.push('Interface multi-perfil: OK', 'Idiomas e bandeiras: OK (12 opções)', 'Modelo Excel completo: OK', 'Salvar e retomar projeto: OK', 'Importação XLSX simples: OK', 'Importação de projeto completo: OK', 'Biblioteca local: OK', 'Alternador métrico/imperial: OK');
         document.getElementById('status').textContent = 'PASS';
       } catch (error) {
         document.getElementById('status').textContent = 'FAIL';

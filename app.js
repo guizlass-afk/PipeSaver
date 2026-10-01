@@ -51,6 +51,14 @@
     else if (text.includes(',')) text = text.replace(',', '.');
     return Number.parseFloat(text);
   }
+  function currentUnit() { return document.documentElement.dataset.unit === 'in' ? 'in' : 'mm'; }
+  let displayUnit = currentUnit();
+  function convertUnit(value, from, to) { if (!Number.isFinite(value) || from === to) return value; const mm = from === 'in' ? value * 25.4 : value; return to === 'in' ? mm / 25.4 : mm; }
+  function toMM(value) { return convertUnit(value, displayUnit, 'mm'); }
+  function fromMM(value) { return convertUnit(value, 'mm', displayUnit); }
+  function lengthDigits() { return displayUnit === 'in' ? 3 : 1; }
+  function formatPlain(value) { if (!Number.isFinite(value)) return ''; const digits = displayUnit === 'in' ? 3 : 2; return String(Math.round(value * 10 ** digits) / 10 ** digits); }
+  function formatLength(mm, digits) { return `${formatNumber(fromMM(Number(mm)), digits ?? lengthDigits())} ${displayUnit}`; }
   function booleanFrom(value) { return ['1', 'true', 'sim', 'yes', 'x', 'priorizar', 'prioritario', 'prioritaria'].includes(normalizeHeader(value)); }
   function normalizeHeader(value) { return String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ''); }
   function safeFileName(value) { return String(value || 'pipesaver').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60) || 'pipesaver'; }
@@ -123,8 +131,9 @@
     ui.dimensionFields.style.gridTemplateColumns = `repeat(${Math.min(3, definition.fields.length)}, minmax(0, 1fr))`;
     definition.fields.forEach(([key, labelKey, initial, kind]) => {
       const wrapper = document.createElement('label'); wrapper.className = 'field';
-      const inputType = kind === 'text' ? 'text' : 'number', value = profile.dimensions[key] ?? initial;
-      wrapper.innerHTML = `<span>${escapeHtml(t(labelKey))}${inputType === 'number' ? ' (mm)' : ''}</span><input data-dimension="${key}" type="${inputType}" value="${String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"${inputType === 'number' ? ' min="0.01" step="0.1"' : ' maxlength="80"'}>`;
+      const inputType = kind === 'text' ? 'text' : 'number', stored = profile.dimensions[key] ?? initial;
+      const value = inputType === 'number' ? formatPlain(fromMM(numberFrom(stored))) : stored;
+      wrapper.innerHTML = `<span>${escapeHtml(t(labelKey))}${inputType === 'number' ? ` (${displayUnit})` : ''}</span><input data-dimension="${key}" type="${inputType}" value="${String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"${inputType === 'number' ? ' min="0.01" step="0.1"' : ' maxlength="80"'}>`;
       wrapper.querySelector('input').addEventListener('change', invalidateResult);
       ui.dimensionFields.appendChild(wrapper);
     });
@@ -136,7 +145,8 @@
   function addStockRow(values = {}, focus = false) {
     const row = document.createElement('div'); row.className = 'stock-row'; row.dataset.stockId = values.id || `stock-${state.nextStockId++}`;
     const profileId = values.profileId || state.activeProfileId || state.profiles[0]?.id;
-    row.innerHTML = `<select class="stock-profile" aria-label="${escapeHtml(t('stockProfile'))}">${profileOptionsMarkup(profileId)}</select><input class="stock-length" type="number" value="${values.length ?? 6000}" min="1" step="0.1" aria-label="${escapeHtml(t('stockLength'))}"><input class="stock-quantity" type="number" value="${values.quantity ?? 1}" min="1" max="9999" step="1" aria-label="${escapeHtml(t('stockQuantity'))}"><label class="stock-priority-label" title="${escapeHtml(t('priorityHelp'))}"><input class="stock-priority" type="checkbox"${values.priority ? ' checked' : ''} aria-label="${escapeHtml(t('priorityBar'))}"></label><button class="remove-stock" type="button" title="${escapeHtml(t('removeBar'))}" aria-label="${escapeHtml(t('removeBar'))}">×</button>`;
+    const stockLengthMM = values.length === undefined ? 6000 : values.length, stockLengthDisplay = stockLengthMM === '' ? '' : formatPlain(fromMM(Number(stockLengthMM)));
+    row.innerHTML = `<select class="stock-profile" aria-label="${escapeHtml(t('stockProfile'))}">${profileOptionsMarkup(profileId)}</select><input class="stock-length" type="number" value="${stockLengthDisplay}" min="1" step="0.1" aria-label="${escapeHtml(t('stockLength'))}"><input class="stock-quantity" type="number" value="${values.quantity ?? 1}" min="1" max="9999" step="1" aria-label="${escapeHtml(t('stockQuantity'))}"><label class="stock-priority-label" title="${escapeHtml(t('priorityHelp'))}"><input class="stock-priority" type="checkbox"${values.priority ? ' checked' : ''} aria-label="${escapeHtml(t('priorityBar'))}"></label><button class="remove-stock" type="button" title="${escapeHtml(t('removeBar'))}" aria-label="${escapeHtml(t('removeBar'))}">×</button>`;
     row.querySelectorAll('input,select').forEach(element => element.addEventListener('change', invalidateResult));
     row.querySelector('.remove-stock').addEventListener('click', () => { if (ui.stockBody.children.length <= 1) return; row.remove(); updateStockRemoveButtons(); syncRelationRows(); invalidateResult(); });
     ui.stockBody.appendChild(row); updateStockRemoveButtons(); if (focus) row.querySelector('.stock-length').focus(); return row;
@@ -149,14 +159,15 @@
     const row = document.createElement('div'); row.className = 'cut-row'; row.dataset.rowId = values.rowId || `cut-${state.nextCutId++}`;
     row.dataset.observation = values.observation || '';
     const profileId = values.profileId || state.activeProfileId || state.profiles[0]?.id;
-    row.innerHTML = `<select class="cut-input cut-profile" aria-label="${escapeHtml(t('cutProfile'))}">${profileOptionsMarkup(profileId)}</select><input class="cut-input cut-id" value="${String(values.id ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')}" placeholder="Ex.: P01" maxlength="60" aria-label="${escapeHtml(t('pieceIdentification'))}"><input class="cut-input cut-length" type="number" value="${values.length ?? ''}" placeholder="0" min="0.01" step="0.1" aria-label="${escapeHtml(t('pieceLength'))}"><input class="cut-input cut-quantity" type="number" value="${values.quantity ?? 1}" min="1" max="9999" step="1" aria-label="${escapeHtml(t('pieceQuantity'))}"><button class="remove-cut" type="button" title="${escapeHtml(t('removeMeasure'))}" aria-label="${escapeHtml(t('removeMeasure'))}">×</button>`;
+    row.innerHTML = `<select class="cut-input cut-profile" aria-label="${escapeHtml(t('cutProfile'))}">${profileOptionsMarkup(profileId)}</select><input class="cut-input cut-id" value="${String(values.id ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')}" placeholder="Ex.: P01" maxlength="60" aria-label="${escapeHtml(t('pieceIdentification'))}"><input class="cut-input cut-length" type="number" value="${values.length === undefined || values.length === '' ? '' : formatPlain(fromMM(Number(values.length)))}" placeholder="0" min="0.01" step="0.1" aria-label="${escapeHtml(t('pieceLength'))}"><input class="cut-input cut-quantity" type="number" value="${values.quantity ?? 1}" min="1" max="9999" step="1" aria-label="${escapeHtml(t('pieceQuantity'))}"><button class="remove-cut" type="button" title="${escapeHtml(t('removeMeasure'))}" aria-label="${escapeHtml(t('removeMeasure'))}">×</button>`;
     row.querySelectorAll('input,select').forEach(input => input.addEventListener('change', invalidateResult));
     row.querySelector('.remove-cut').addEventListener('click', () => { if (ui.cutsBody.children.length <= 1) return; row.remove(); updateCutRemoveButtons(); syncRelationRows(); invalidateResult(); });
     ui.cutsBody.appendChild(row); updateCutRemoveButtons(); if (focus) row.querySelector('.cut-id').focus(); return row;
   }
+  function lengthToMM(raw) { const text = String(raw ?? '').trim(); return text === '' ? '' : String(toMM(numberFrom(text))); }
   function syncRelationRows() {
-    state.stocks = [...ui.stockBody.querySelectorAll('.stock-row')].map(row => ({ id: row.dataset.stockId, profileId: row.querySelector('.stock-profile').value, length: row.querySelector('.stock-length').value, quantity: row.querySelector('.stock-quantity').value, priority: row.querySelector('.stock-priority').checked }));
-    state.cuts = [...ui.cutsBody.querySelectorAll('.cut-row')].map(row => ({ rowId: row.dataset.rowId, profileId: row.querySelector('.cut-profile').value, id: row.querySelector('.cut-id').value, length: row.querySelector('.cut-length').value, quantity: row.querySelector('.cut-quantity').value, observation: row.dataset.observation || '' }));
+    state.stocks = [...ui.stockBody.querySelectorAll('.stock-row')].map(row => ({ id: row.dataset.stockId, profileId: row.querySelector('.stock-profile').value, length: lengthToMM(row.querySelector('.stock-length').value), quantity: row.querySelector('.stock-quantity').value, priority: row.querySelector('.stock-priority').checked }));
+    state.cuts = [...ui.cutsBody.querySelectorAll('.cut-row')].map(row => ({ rowId: row.dataset.rowId, profileId: row.querySelector('.cut-profile').value, id: row.querySelector('.cut-id').value, length: lengthToMM(row.querySelector('.cut-length').value), quantity: row.querySelector('.cut-quantity').value, observation: row.dataset.observation || '' }));
   }
   function renderRelationRows() {
     ui.stockBody.innerHTML = '';
@@ -171,7 +182,7 @@
     profile.material = ui.material.value;
     profile.type = ui.sectionType.value;
     profile.dimensions = {};
-    ui.dimensionFields.querySelectorAll('[data-dimension]').forEach(input => { profile.dimensions[input.dataset.dimension] = input.value; });
+    ui.dimensionFields.querySelectorAll('[data-dimension]').forEach(input => { profile.dimensions[input.dataset.dimension] = input.type === 'number' ? String(toMM(numberFrom(input.value))) : input.value; });
     syncRelationRows();
   }
   function renderActiveProfile() {
@@ -191,12 +202,12 @@
   function profileDescription(profile) {
     const d = profile.dimensions;
     switch (profile.type) {
-      case 'roundTube': return `Ø ${formatNumber(d.diameter)} × ${formatNumber(d.thickness)} mm`;
-      case 'squareTube': return `${formatNumber(d.side)} × ${formatNumber(d.side)} × ${formatNumber(d.thickness)} mm`;
-      case 'rectTube': return `${formatNumber(d.width)} × ${formatNumber(d.height)} × ${formatNumber(d.thickness)} mm`;
-      case 'roundBar': return `Ø ${formatNumber(d.diameter)} mm`;
-      case 'flatBar': return `${formatNumber(d.width)} × ${formatNumber(d.thickness)} mm`;
-      case 'angle': return `${formatNumber(d.legA)} × ${formatNumber(d.legB)} × ${formatNumber(d.thickness)} mm`;
+      case 'roundTube': return `Ø ${formatLength(d.diameter)} × ${formatLength(d.thickness)}`;
+      case 'squareTube': return `${formatLength(d.side)} × ${formatLength(d.side)} × ${formatLength(d.thickness)}`;
+      case 'rectTube': return `${formatLength(d.width)} × ${formatLength(d.height)} × ${formatLength(d.thickness)}`;
+      case 'roundBar': return `Ø ${formatLength(d.diameter)}`;
+      case 'flatBar': return `${formatLength(d.width)} × ${formatLength(d.thickness)}`;
+      case 'angle': return `${formatLength(d.legA)} × ${formatLength(d.legB)} × ${formatLength(d.thickness)}`;
       default: return String(d.description || t('customDescription'));
     }
   }
@@ -211,7 +222,7 @@
   }
   function readProjectConfig() {
     serializeActiveProfile();
-    const kerf = numberFrom(ui.kerf.value);
+    const kerf = toMM(numberFrom(ui.kerf.value));
     if (!(kerf >= 0)) throw new Error('A espessura de corte não pode ser negativa.');
     const configuredProfiles = []; let totalPieces = 0;
     state.profiles.forEach((profile, profileIndex) => {
@@ -360,7 +371,7 @@
 
   function renderResult(projectResult) {
     state.result = projectResult; ui.resultContent.hidden = false; ui.exportButton.disabled = ui.printButton.disabled = false;
-    ui.metricBars.textContent = projectResult.totalBars; ui.metricUsage.textContent = `${formatNumber(projectResult.utilization, 1)}%`; ui.metricPieces.textContent = projectResult.totalPieces; ui.metricWaste.textContent = `${formatNumber(projectResult.totalWaste, 1)} mm`;
+    ui.metricBars.textContent = projectResult.totalBars; ui.metricUsage.textContent = `${formatNumber(projectResult.utilization, 1)}%`; ui.metricPieces.textContent = projectResult.totalPieces; ui.metricWaste.textContent = formatLength(projectResult.totalWaste);
     ui.profileBadge.textContent = `${projectResult.profileResults.length} ${t('profiles')}`;
     ui.resultSubtitle.textContent = t('resultSummary', { profiles:`${projectResult.profileResults.length} ${t('profiles')}`, bars:`${projectResult.totalBars} ${t('bars')}`, pieces:`${projectResult.totalPieces} ${t('pieces').toLowerCase()}`, status:t(projectResult.optimal ? 'mathematicalMinimum' : 'mixedStockOptimized') });
     ui.barsVisual.innerHTML = ''; const maxStock = Math.max(...projectResult.profileResults.flatMap(result => result.bins.map(bin => bin.stockLength)));
@@ -369,19 +380,19 @@
       result.bins.forEach((bin, index) => {
         const row = document.createElement('div'); row.className = 'bar-row';
         const stockLabel = t(bin.stockType.labelKey || (bin.stockType.priority ? 'preferredBar' : 'availableBar'));
-        const label = document.createElement('div'); label.className = 'bar-label'; label.innerHTML = `${escapeHtml(t('barUpper', { number:index + 1 }))}<small>${escapeHtml(stockLabel)} · ${formatNumber(bin.stockLength)} mm</small>`;
-        const track = document.createElement('div'); track.className = 'bar-track'; track.style.width = `${Math.max(22, bin.stockLength / maxStock * 100)}%`; track.title = t('consumedOf', { used:formatNumber(bin.used), total:formatNumber(bin.stockLength) });
+        const label = document.createElement('div'); label.className = 'bar-label'; label.innerHTML = `${escapeHtml(t('barUpper', { number:index + 1 }))}<small>${escapeHtml(stockLabel)} · ${formatLength(bin.stockLength)}</small>`;
+        const track = document.createElement('div'); track.className = 'bar-track'; track.style.width = `${Math.max(22, bin.stockLength / maxStock * 100)}%`; track.title = t('consumedOf', { used:formatLength(bin.used), total:formatLength(bin.stockLength) });
         bin.items.forEach((item, itemIndex) => {
-          const piece = document.createElement('div'); piece.className = 'bar-piece'; piece.style.width = `${item.length / bin.stockLength * 100}%`; piece.style.background = palette[(profileIndex * 3 + item.colorIndex) % palette.length]; piece.textContent = item.length / bin.stockLength > .055 ? `${item.id} · ${formatNumber(item.length)}` : formatNumber(item.length); piece.title = `${item.id} — ${formatNumber(item.length)} mm`; track.appendChild(piece);
-          if (itemIndex < bin.items.length - 1 && result.config.kerf > 0) { const kerf = document.createElement('span'); kerf.className = 'bar-kerf'; kerf.style.width = `${Math.max(.12, result.config.kerf / bin.stockLength * 100)}%`; kerf.title = t('cutThickness', { value:formatNumber(result.config.kerf) }); track.appendChild(kerf); }
+          const piece = document.createElement('div'); piece.className = 'bar-piece'; piece.style.width = `${item.length / bin.stockLength * 100}%`; piece.style.background = palette[(profileIndex * 3 + item.colorIndex) % palette.length]; piece.textContent = item.length / bin.stockLength > .055 ? `${item.id} · ${formatNumber(fromMM(item.length), lengthDigits())}` : formatNumber(fromMM(item.length), lengthDigits()); piece.title = `${item.id} — ${formatLength(item.length)}`; track.appendChild(piece);
+          if (itemIndex < bin.items.length - 1 && result.config.kerf > 0) { const kerf = document.createElement('span'); kerf.className = 'bar-kerf'; kerf.style.width = `${Math.max(.12, result.config.kerf / bin.stockLength * 100)}%`; kerf.title = t('cutThickness', { value:formatLength(result.config.kerf) }); track.appendChild(kerf); }
         });
-        const waste = document.createElement('div'); waste.className = 'bar-waste-label'; waste.innerHTML = `${escapeHtml(t('waste'))}<br><strong>${formatNumber(bin.waste)} mm</strong>`; row.append(label, track, waste); ui.barsVisual.appendChild(row);
+        const waste = document.createElement('div'); waste.className = 'bar-waste-label'; waste.innerHTML = `${escapeHtml(t('waste'))}<br><strong>${formatLength(bin.waste)}</strong>`; row.append(label, track, waste); ui.barsVisual.appendChild(row);
       });
     });
     ui.patternsBody.innerHTML = '';
     projectResult.profileResults.forEach(result => groupedPatterns(result).forEach((group, patternIndex) => {
-      const bin = group.example, row = document.createElement('tr'), sequence = bin.items.map(item => `<span class="cut-chip">${escapeHtml(item.id)} · ${formatNumber(item.length)} mm</span>`).join('');
-      row.innerHTML = `<td><strong>${escapeHtml(result.config.name)}</strong><br><small>${escapeHtml(profileDescription(result.config))}</small></td><td><span class="pattern-code">PC-${String(patternIndex + 1).padStart(2, '0')}</span><br><small>${escapeHtml(t('barNumbers', { numbers:group.bins.join(', ') }))}</small></td><td>${escapeHtml(t(bin.stockType.labelKey || (bin.stockType.priority ? 'preferredBar' : 'availableBar')))}<br><strong>${formatNumber(bin.stockLength)} mm</strong></td><td><strong>${group.bins.length}</strong></td><td class="cut-sequence">${sequence}</td><td>${formatNumber(bin.used)} mm</td><td>${formatNumber(bin.waste)} mm</td><td>${formatNumber(bin.utilization, 1)}%</td>`; ui.patternsBody.appendChild(row);
+      const bin = group.example, row = document.createElement('tr'), sequence = bin.items.map(item => `<span class="cut-chip">${escapeHtml(item.id)} · ${formatLength(item.length)}</span>`).join('');
+      row.innerHTML = `<td><strong>${escapeHtml(result.config.name)}</strong><br><small>${escapeHtml(profileDescription(result.config))}</small></td><td><span class="pattern-code">PC-${String(patternIndex + 1).padStart(2, '0')}</span><br><small>${escapeHtml(t('barNumbers', { numbers:group.bins.join(', ') }))}</small></td><td>${escapeHtml(t(bin.stockType.labelKey || (bin.stockType.priority ? 'preferredBar' : 'availableBar')))}<br><strong>${formatLength(bin.stockLength)}</strong></td><td><strong>${group.bins.length}</strong></td><td class="cut-sequence">${sequence}</td><td>${formatLength(bin.used)}</td><td>${formatLength(bin.waste)}</td><td>${formatNumber(bin.utilization, 1)}%</td>`; ui.patternsBody.appendChild(row);
     }));
   }
 
@@ -433,7 +444,7 @@
     serializeActiveProfile();
     const profileName = new Map(state.profiles.map(profile => [profile.id, profile.name || 'Perfil sem nome']));
     const profileRows = state.profiles.map(profileSheetRow), stockRows = state.stocks.map(stock => [profileName.get(stock.profileId) || '', stock.length, stock.quantity, stock.priority ? 'Sim' : 'Não']), cutRows = state.cuts.map(cut => [profileName.get(cut.profileId) || '', cut.id, cut.length, cut.quantity, cut.observation || '']);
-    const workbook = buildProjectWorkbook(profileRows, stockRows, cutRows, [['Versao_modelo',2],['Nome_projeto',ui.projectName.value],['Espessura_corte_mm',ui.kerf.value],['Unidade','mm'],['Salvo_em',new Date().toLocaleString(state.language)]]);
+    const workbook = buildProjectWorkbook(profileRows, stockRows, cutRows, [['Versao_modelo',2],['Nome_projeto',ui.projectName.value],['Espessura_corte_mm',toMM(numberFrom(ui.kerf.value))],['Unidade','mm'],['Salvo_em',new Date().toLocaleString(state.language)]]);
     XLSX.writeFile(workbook, `${safeFileName(ui.projectName.value)}_projeto_pipesaver.xlsx`); setMessage(t('projectSaved'), 'success');
   }
   function findHeader(headers, aliases) { return headers.find(header => aliases.includes(normalizeHeader(header))); }
@@ -494,7 +505,7 @@
         if (!profileHeader) throw new Error('A aba Cortes deve conter a coluna Perfil.');
         cutRows.forEach((row, index) => { const profileKey = normalizeHeader(row[profileHeader]), profile = map.get(profileKey); if (!profile) throw new Error(`Perfil não encontrado na linha ${index + 2} da aba Cortes.`); const rawLength = String(row[lengthHeader]).trim(), rawQuantity = String(row[quantityHeader]).trim(), length = rawLength === '' ? '' : numberFrom(rawLength), quantity = rawQuantity === '' ? 1 : Math.trunc(numberFrom(rawQuantity)); if ((rawLength !== '' && !(length > 0)) || !(quantity >= 1)) throw new Error(`Corte inválido na linha ${index + 2}.`); importedCuts.push({ rowId:`cut-${state.nextCutId++}`, profileId:profile.id, id:String(idHeader ? row[idHeader] : '').trim(), length, quantity, observation:String(observationHeader ? row[observationHeader] : '').trim() }); });
         importedStocks.forEach(stock => { stock.profileId = map.get(stock.profileKey).id; delete stock.profileKey; });
-        state.profiles = importedProfiles; state.stocks = importedStocks; state.cuts = importedCuts; state.activeProfileId = importedProfiles[0].id; if (importedKerf !== null) ui.kerf.value = importedKerf;
+        state.profiles = importedProfiles; state.stocks = importedStocks; state.cuts = importedCuts; state.activeProfileId = importedProfiles[0].id; if (importedKerf !== null) ui.kerf.value = formatPlain(fromMM(numberFrom(importedKerf)));
       } else {
         serializeActiveProfile(); const profile = activeProfile(); state.cuts = state.cuts.filter(cut => cut.profileId !== profile.id);
         cutRows.forEach((row, index) => { const length = numberFrom(row[lengthHeader]), quantity = Math.trunc(numberFrom(row[quantityHeader])); if (!(length > 0) || !(quantity >= 1)) throw new Error(`Dados inválidos na linha ${index + 2}.`); state.cuts.push({ rowId:`cut-${state.nextCutId++}`, profileId:profile.id, id:String(idHeader ? row[idHeader] : '').trim() || `P${index + 1}`, length, quantity, observation:String(observationHeader ? row[observationHeader] : '').trim() }); });
@@ -543,6 +554,21 @@
   });
   document.addEventListener('click', event => { if (!ui.languagePicker.contains(event.target)) setLanguageMenu(false); });
 
+  function convertDisplayedLengthInputs(prevUnit, nextUnit) {
+    if (prevUnit === nextUnit) return;
+    const convert = input => { const v = numberFrom(input.value); if (Number.isFinite(v)) input.value = formatPlain(convertUnit(v, prevUnit, nextUnit)); };
+    convert(ui.kerf);
+    ui.stockBody.querySelectorAll('.stock-length').forEach(convert);
+    ui.cutsBody.querySelectorAll('.cut-length').forEach(convert);
+  }
+  document.addEventListener('unitchange', event => {
+    const next = event.detail.unit, prev = displayUnit; if (next === prev) return;
+    displayUnit = next; convertDisplayedLengthInputs(prev, next);
+    if (state.profiles.length) renderActiveProfile();
+    if (state.result) renderResult(state.result);
+  });
+
+  ui.kerf.value = formatPlain(fromMM(numberFrom(ui.kerf.value)));
   const firstProfile = makeProfile(t('profileDefault', { number:1 })); state.profiles.push(firstProfile); state.activeProfileId = firstProfile.id; state.stocks.push({id:`stock-${state.nextStockId++}`,profileId:firstProfile.id,length:6000,quantity:1}); state.cuts.push({rowId:`cut-${state.nextCutId++}`,profileId:firstProfile.id,id:'',length:'',quantity:1}); renderActiveProfile(); renderRelationRows(); applyLanguage(state.language, false);
-  window.PipeSaverCore = Object.freeze({ optimizeCuttingList, optimizeProject, groupedPatterns, profileDescription, numberFrom, applyLanguage });
+  window.PipeSaverCore = Object.freeze({ optimizeCuttingList, optimizeProject, groupedPatterns, profileDescription, numberFrom, applyLanguage, convertUnit, formatLength });
 })();
